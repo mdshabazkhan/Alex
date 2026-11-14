@@ -1,0 +1,47 @@
+# Deterministic Reflexes for Jarvis Fast-Path
+# Executes instantaneously via native macOS tools without waking LLMs
+
+guards:
+  # Any compound or conditional phrasing skips fast-path directly to Matrix
+  - '\b(don''t|do not|not|never|unless|if|when|after|before|then|and|but)\b'
+
+reflexes:
+  - id: wifi_toggle
+    match: '^((turn|switch) (on|off) (the )?wi-?fi|wi-?fi (on|off)|(enable|disable) wi-?fi)$'
+    tool: system
+    action: toggle_wifi
+
+  - id: bluetooth_toggle
+    match: '^((turn|switch) (on|off) (the )?bluetooth|bluetooth (on|off)|(enable|disable) bluetooth)$'
+    tool: system
+    action: toggle_bluetooth
+
+  - id: volume_set
+    match: '^(set )?volume (to )?(?P<level>\d+)$'
+    tool: system
+    action: set_volume
+
+  - id: dark_mode_toggle
+    match: '^((turn|switch) (on|off) dark mode|dark mode (on|off))$'
+    tool: system
+    action: toggle_dark_mode
+
+  - id: app_open
+    match: '^(open|launch) (?P<app>[a-zA-Z0-9\s]+)$'
+    tool: apps
+    action: open_app
+
+  - id: app_quit
+    match: '^(quit|close) (?P<app>[a-zA-Z0-9\s]+)$'
+    tool: apps
+    action: quit_app
+
+  - id: media_playback
+    match: '^(play|pause|resume|next song|previous song)$'
+    tool: media
+    action: control_playback
+
+  - id: status_query
+    match: '^(what is the status|current tasks|show progress|what are you working on)$'
+    tool: ui
+    action: display_tasks

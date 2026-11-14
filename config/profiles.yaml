@@ -1,0 +1,66 @@
+# Model Profiles & Gateway Routing for Alex
+gateways:
+  freellmapi:
+    base_url: "http://127.0.0.1:3001/v1"
+    key_env: "FREELLMAPI_KEY"
+    health_endpoint: "http://127.0.0.1:3001/v1/models"
+    enabled: true
+  groq:
+    base_url: "https://api.groq.com/openai/v1"
+    key_env: "GROQ_API_KEY"
+    health_endpoint: "https://api.groq.com/openai/v1/models"
+    enabled: true
+  openrouter:
+    base_url: "https://openrouter.ai/api/v1"
+    key_env: "OPENROUTER_API_KEY"
+    health_endpoint: "https://openrouter.ai/api/v1/models"
+    enabled: true
+  omniroute:
+    base_url: "http://127.0.0.1:20128/v1"
+    key_env: "OMNIROUTE_KEY"
+    enabled: true
+  ollama:
+    base_url: "http://127.0.0.1:11434/v1"
+    enabled: true
+    offline_only: true
+
+# Sticky session policy: guarantees the model route stays pinned for the task duration
+session_policy:
+  enforce_sticky: true
+  lock_duration_minutes: 45
+  failover_only_on_hard_error: true
+
+profiles:
+  fast:
+    chain: ["freellmapi:auto", "groq:llama-3.3-70b-versatile", "openrouter:auto"]
+    max_output_tokens: 450
+    tools: false
+    sticky: true
+
+  agent:
+    chain: ["freellmapi:tool-capable", "groq:llama-3.3-70b-versatile", "openrouter:auto"]
+    require_tools: true
+    sticky: true
+
+  coding:
+    chain: ["freellmapi:coding", "groq:llama-3.3-70b-versatile", "openrouter:auto"]
+    require_tools: true
+    sticky: true
+
+  reasoning:
+    chain: ["groq:deepseek-r1-distill-llama-70b", "openrouter:auto", "freellmapi:auto"]
+    sticky: true
+
+  local:
+    chain: ["ollama:qwen3-4b-64k"]
+    offline_only: true
+    sticky: true
+
+budgets:
+  per_task_tokens:
+    quick_answer: 2000
+    basic: 0
+    complex_default: 120000
+  warn_at: 0.80
+  pause_at: 1.00
+  daily_tokens: 2000000

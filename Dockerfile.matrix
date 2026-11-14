@@ -1,0 +1,28 @@
+FROM python:3.11-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# System dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Matrix core, config, and guardrails
+COPY config/ /app/config/
+COPY matrix/ /app/matrix/
+COPY Alex_Safety_Guardrails.md /app/
+
+# Expose Matrix Supervisor & Gateway port
+EXPOSE 8700
+
+# Start Matrix FastAPI server
+CMD ["uvicorn", "matrix.api:app", "--host", "0.0.0.0", "--port", "8700"]

@@ -1,0 +1,34 @@
+# Hermes Agent Configuration for Project Alex
+model:
+  provider: custom:matrix
+  default: friday-agent
+
+providers:
+  matrix:
+    api: http://127.0.0.1:8700/v1
+    transport: chat_completions
+    session_affinity_header: X-Friday-Session
+    models:
+      friday-agent:
+        context_length: 131072
+      friday-coding:
+        context_length: 131072
+      friday-fast:
+        context_length: 32768
+
+# Direct fallback providers omitted intentionally so all model traffic routes through Matrix Gateway
+fallback_providers: []
+
+tools:
+  terminal:
+    enabled: true
+    workspace_only: true
+  files:
+    enabled: true
+  browser:
+    enabled: true
+    profile: "Alex"
+  voice:
+    enabled: false # Handled natively by Jarvis
+  image_generation:
+    enabled: false # Trimmed to save token overhead

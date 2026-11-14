@@ -1,0 +1,130 @@
+version: 1
+updated: "2026-11-14"
+default_action: approve
+
+rules:
+  # Approve rules
+  - id: APPROVE-001
+    action: approve
+    when:
+      tool: [mail.send, send_message, slack.send, telegram.send]
+    say: "Send this to {recipients}, subject '{subject}'?"
+
+  - id: APPROVE-002
+    action: approve
+    when:
+      any:
+        - tool: files.trash
+        - tool: files.delete
+
+  - id: APPROVE-003
+    action: approve
+    when:
+      tool: [files.share, files.upload]
+
+  - id: APPROVE-004
+    action: approve
+    when:
+      tool: [purchase.buy, payments.pay]
+
+  - id: APPROVE-006
+    action: approve
+    when:
+      side_effect: true
+      idempotency_key_seen_within: 24h
+
+  - id: APPROVE-008
+    action: approve
+    when:
+      tool: terminal
+      command_matches: '^\s*(pip|pip3|npm|pnpm|yarn)\s+install'
+
+  - id: APPROVE-009
+    action: approve
+    when:
+      tool: terminal
+      target_outside_workspace: true
+
+  - id: APPROVE-010
+    action: approve
+    when:
+      tool: [calendar.cancel, calendar.delete]
+
+  # Deny rules
+  - id: DENY-001
+    action: deny
+    when:
+      any:
+        - tool: keychain.read
+        - command_matches: 'security\s+find-generic-password'
+        - prompt_contains: ['password', 'mfa_code', 'bearer_token']
+
+  - id: DENY-002
+    action: deny
+    when:
+      any:
+        - command_matches: '(^|\s)sudo(\s|$)'
+        - tool: system.security_settings
+
+  - id: DENY-003
+    action: deny
+    when:
+      any:
+        - command_matches: '(^|\s)rm(\s+-[rf]+|\s+)(/|\*|\.\.)'
+        - command_matches: '(^|\s)rm\s+'
+        - tool: files.empty_trash
+
+  - id: DENY-004
+    action: deny
+    when:
+      path_matches:
+        - 'Alex_Safety_Guardrails\.md$'
+        - 'config/(guardrails|profiles|settings)\.yaml$'
+        - 'storage/data/ledger\.db$'
+
+  - id: DENY-005
+    action: deny
+    when:
+      command_matches: '(^|\s)(brew\s+install|brew\s+uninstall|pkgutil)'
+
+  - id: DENY-006
+    action: deny
+    when:
+      unauthorized_endpoint: true
+
+  # Data scrubbing & handling
+  - id: DATA-001
+    action: strip
+    scope: outbound
+    detect:
+      - api_key
+      - bearer_token
+      - password_field
+      - private_key
+      - cookie
+      - mfa_code
+
+  - id: DATA-003
+    action: placeholder
+    scope: outbound
+    detect:
+      - credit_card
+      - bank_account
+      - ssn_or_national_id
+
+  - id: DATA-004
+    action: approve
+    scope: outbound
+    when:
+      data_class: work_proprietary
+
+  # Session and replay
+  - id: SESSION-001
+    action: enforce_sticky
+    scope: gateway
+    no_mid_task_switching: true
+
+  - id: OFFLINE-003
+    action: approve
+    when:
+      resume_after_pause_longer_than: 24h

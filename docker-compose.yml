@@ -1,0 +1,82 @@
+services:
+  # ============================================================================
+  # 1. MATRIX: Supervisor, Model Gateway, Token Scrubbing & Task Ledger
+  # ============================================================================
+  matrix:
+    image: alex-matrix:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.matrix
+    container_name: alex-matrix
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8700:8700"
+    env_file:
+      - .env
+    environment:
+      FREELLMAPI_URL: http://host.docker.internal:3001/v1
+      OMNIROUTE_URL: http://host.docker.internal:20128/v1
+      FREELLMAPI_KEY: ${FREELLMAPI_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ./storage:/app/storage
+      - ./config:/app/config
+      - ./matrix:/app/matrix
+      - ./tools:/app/tools
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - alex-net
+
+  # ============================================================================
+  # 2. HERMES: Complex Autonomous Worker Daemon & Skills Runtime
+  # ============================================================================
+  hermes:
+    image: alex-hermes:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.hermes
+    container_name: alex-hermes
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8642:8642"
+    env_file:
+      - .env
+    environment:
+      MATRIX_GATEWAY_URL: http://matrix:8700/v1
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ./storage/workspace:/app/workspace
+      - ./hermes:/app/hermes
+    depends_on:
+      - matrix
+    networks:
+      - alex-net
+
+  # ============================================================================
+  # 3. JARVIS: Interactive Web Dashboard & Progress UI
+  # ============================================================================
+  jarvis:
+    image: alex-jarvis:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.jarvis
+    container_name: alex-jarvis
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8005:8000"
+    environment:
+      MATRIX_URL: http://matrix:8700
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ./jarvis:/app/jarvis
+    depends_on:
+      - matrix
+    networks:
+      - alex-net
+
+networks:
+  alex-net:
+    driver: bridge

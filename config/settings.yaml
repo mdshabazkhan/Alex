@@ -1,0 +1,50 @@
+# Alex System Settings
+project_name: "Alex"
+version: "3.0.0"
+
+# Designated storage folders
+storage:
+  root: "storage"
+  workspace: "storage/workspace"
+  data: "storage/data"
+  reports: "storage/reports"
+  logs: "storage/logs"
+  ledger_db: "storage/data/ledger.db"
+  memory_db: "storage/data/memory.db"
+
+# Network & Ports
+network:
+  matrix_host: "127.0.0.1"
+  matrix_port: 8700
+  hermes_host: "127.0.0.1"
+  hermes_port: 9119
+  hermes_dashboard_url: "http://127.0.0.1:9119"
+  docker_freellmapi: "http://127.0.0.1:3001/v1"
+  docker_omniroute: "http://127.0.0.1:20128/v1"
+  ollama_fallback: "http://127.0.0.1:11434/v1"
+
+# Voice & Audio Interruption Filters
+voice:
+  enabled: true
+  engine: "kokoro"
+  interruption_policy: "strict_important_only"
+  # Voice assistant ONLY speaks for these specific lifecycle events
+  allowed_speech_events:
+    - "task_started"      # "On it, sir."
+    - "task_completed"    # "Done: ..." (only when verified)
+    - "task_failed"       # "Task failed: ..." (with Doctor diagnosis)
+    - "task_paused"       # "Paused at step n/N due to ..."
+    - "approval_needed"   # "Approval needed to ..."
+    - "milestone_30s"     # Only for long tasks (> 30 seconds), milestone step
+  prohibited_speech_events:
+    - "filler_speech"     # Never speak filler before instant actions
+    - "tool_call_start"   # Don't announce every intermediate tool
+    - "status_heartbeat"  # Keep silent heartbeats in UI, not audio
+
+# UI Settings (Jarvis Face)
+ui:
+  theme: "dark"
+  refresh_interval_ms: 500
+  max_recent_tasks: 15
+  progress_bar_length: 24
+  show_percentage: true

@@ -1,0 +1,13 @@
+also tasks are not being recorded here in matrix.
+
+matrix also doesnt respond to conversations..
+
+we need option to clear log in Matrix.
+
+jarvis ui shows logs from matrix still.
+
+the clear logs button doesnt work.
+
+and logs are old.
+
+and all are false positives.

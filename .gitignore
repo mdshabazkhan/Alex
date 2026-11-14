@@ -1,0 +1,28 @@
+# Sensitive Environment Variables
+.env
+.env.*
+!.env.example
+
+# Virtual Environments
+venv/
+.venv/
+env/
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Databases & Runtime Storage
+storage/data/*.db
+storage/data/*.db-shm
+storage/data/*.db-wal
+storage/logs/*
+storage/workspace/*
+storage/reports/*
+
+# macOS System Files
+.DS_Store
+.AppleDouble
+.LSOverride

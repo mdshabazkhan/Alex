@@ -1,0 +1,68 @@
+Alex is not one AI,
+Openjarvis has access to everything, like vision etc.
+Openjarvis is the eyes, ears and mouth of Alex.
+
+Once I assign task to alex.
+if its basic, Openjarvis does it himself and updates to Matric.
+if its comples it asks matrix to give it to hermes.
+Openjarvis constantly keeps interacting with matrix to get hermes status report.
+but Openjarvis doesnt keep interupting user.
+he will only notify once a task is complete by hermes, Openjarvis speaks task complete.
+else if there is emergency or notifies if blocker.
+or retrying
+
+Yes even Hermes has its own eyes and ears but it will mainly use it to complete task, not to interact with user.
+unless user interacts with it directly.
+This way all 3 AI Brains work together.
+Openjarvis is always live.
+Hermes and Matrix on standby for backend works.
+When I say command "Wake up Alex" the app starts.
+
+Alex : "Good morning Master Khan, What can I do for you"
+user: "Whats the gold rate today?"
+Alex:"According to google its  24 karat x rs in Bangalore today"
+Alex: "Anything else master"
+user:"No"
+Alex: "I will be off then, say the word and I will be there" (shuts down Application)
+
+Another Example:
+
+I say command "Wake up Alex" the app starts.
+
+Alex : "Good morning Master Khan, What can I do for you"
+user:"I need you to write an essay and send to max"
+Alex: "Sure sir can you tell me the topic and number of words?"
+user:" 100 words topic diwali"
+Alex:"how do you wish to send max sir?"
+user"mail him on gmail."
+Alex:"Sure sir, I cant find his email in my memory can you tell me so I can save it?"
+user:"max123@gmail.com all small letters"
+Alex:"Thank you, sir, I will get started right away."
+(now Openjarvis assigns this task to Hermes via Matrix, 
+Hermes takes the task, gives eta to jarvis via Matrix.)
+Alex:"ETA for this task is x minutes, I will be inform you when its done."
+Alex:"Is there any other task you wish me to do."
+user:"yes, you can make a happy diwali card pdf".
+Alex: "Adding this task in queue."
+Alex:"Is there any other task you wish me to do."
+user:"No"
+Alex:"I will keep you posted"
+ Now there are two tasks for hermes, one is of creating document, and sending it and another is creating diwali greeting card.
+if it can multiprocess then fine but whatever it does it must keep Openjarvis via matrix posted. 
+when these tasks are done only then Alex speaks )
+Alex:"I am done creating the essay document, and have drafted a email for you. Do you wish to proof read before I send sir?"
+user:"No just send it" (User approved so alex sends it)
+(else user manually checks and sends)
+(Meanwhile pdf is created)
+Alex:"Pdf for diwali wishes is created and stored in this path sir. Do you wish to send it too?"
+user:"no"
+Alex: "Anything else you wish for master?"
+user:"No"
+Alex: "I will be off then, say the word and I will be there" (shuts down Application)
+
+
+This is what I want.
+understand this and configure apps properly.
+So that we get this result.
+
+
