@@ -278,3 +278,42 @@ timeout. The runtime now redirects the child to `<workspace>/run.log` (a file al
 keeps the last 8 KB as `output`, so a timed-out run is diagnosable. Runs dispatched before this fix:
 `run_19c1de9f`, `run_c1245c7f`, `run_c6e60a25` (all `failed`/`running`, no artifacts);
 `run_294c1689` after it, still inconclusive at the time of writing.
+
+## Runs that hung at `running` with an empty `run.log` — fixed (2026-11-16)
+
+The suspected cause (post_tool_call blocking on the SQLite ledger) was **not** it. Four real
+defects, each verified after the fix:
+
+1. **The ledger path followed the process working directory.**
+   `matrix/store.py` had `_DATA_ROOT = os.environ.get("ALEX_DATA_ROOT") or os.getcwd()`, directly
+   under a comment claiming the opposite. The Hermes daemon runs with the user's project as its
+   cwd (`/Users/mdshabazkhan/Documents/dependencies/Alex`), so it wrote steps and model calls to
+   `Alex/storage/data/ledger.db` while Matrix wrote `~/.openjarvis/src/storage/data/ledger.db` —
+   two ledgers, one of them invisible. The root now comes from the package location
+   (`parents[4]` when it holds `config/`, else `~/.openjarvis/src`); verified identical from both
+   working directories.
+2. **Agent children outlived the daemon and shared its process group.** `os.getpgid(child)` returned
+   the *daemon's* group, so one orphan sat for 52 minutes holding the only local model and the next
+   run queued behind it. Children now start with `start_new_session=True`, `/stop` and the 1200 s
+   budget kill the whole group (`SIGTERM`, then `SIGKILL`), the `lifespan` shutdown kills every
+   in-flight group, and startup reaps orphans matched by `Storage/Artifacts/hermes/runs` + the
+   hermes binary. Verified: child pgid == its own pid, `/stop` → child exit `-15`, run `stopped`
+   with `finished_at`, no orphan, `active: 0`.
+3. **Candidate failures were invisible.** `api.py` returned `HTTPException(500, detail=str(e))` and
+   `str(httpx.ReadTimeout())` is empty, so every gateway failure reached Hermes as a bodyless 500.
+   The detail now names the type, and the gateway prints one line per failed candidate. That is how
+   the real blocker became visible: `groq 401`, `openrouter 401`, `freellmapi 401` on every call.
+4. **No progress visibility while a run was in flight.** Output went to a pipe; `-z` is quiet. Each
+   run now writes `<workspace>/run.log` and `GET /v1/runs/{id}` returns a `log_tail`.
+
+## Why 5.1 still cannot be ticked
+
+- `groq`, `openrouter` and `freellmapi` all answer **401 Unauthorized**: no provider key exists on
+  this machine, so the `agent` chain always ends at `ollama:qwen3:4b-16k`.
+- Local measurements: `hermes -z "What is 2+2?…" -t file` answers in under a minute, but
+  `hermes -z "Create hello.txt containing the word hi." -t file` did **not** finish in 280 s
+  (no `hello.txt`, no `usage.json`), and a Hermes-sized payload (26.6 KB, 24 tools) at 16k context
+  returns HTTP 200 with `content: ""` — qwen3 spends its whole completion budget reasoning.
+- A three-toolset task therefore cannot complete on this machine today. Closing 5.1 needs one
+  provider key (Groq's free `llama-3.3-70b-versatile` is already first in the `agent` chain) — after
+  that, the same POST to `/v1/runs` is the whole proof.

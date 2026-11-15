@@ -292,10 +292,11 @@ Target layout:
 - [ ] **5.1** Replace stub `daemon.py` with the real runtime: `/v1/runs` starts an agent loop with toolsets (terminal, files, browser, web, mail, delegation, MCP `friday-mac`)
   - Done when: a run exercises at least three distinct toolsets and returns real artifacts.
   - 2026-11-16 status: the stub is gone — `:8642` now drives the installed `hermes` CLI with the
-    configured toolsets and a per-run workspace under `Storage/Artifacts/hermes/runs/`. Not ticked:
-    no run has yet finished with three toolsets and artifacts (no cloud provider key on the machine;
-    local `qwen3:4b-16k` does not complete a multi-tool task inside the run budget). Details in
-    `REPORT.md`, Phase 5.
+    configured toolsets, and each run owns a process group (killed on timeout and on shutdown) with
+    a workspace under `Storage/Artifacts/hermes/runs/`. Not ticked: no run has finished with three
+    toolsets and artifacts. Every cloud candidate answers 401 (no provider key is configured), so
+    all traffic lands on local `qwen3:4b-16k`, which cannot finish even a single-tool task inside
+    the budget. Details in `REPORT.md`, Phase 5.
 - [ ] **5.2** Model provider = `custom:matrix` (`http://127.0.0.1:8700/v1`), no direct fallbacks
   - Done when: stopping Matrix breaks Hermes model calls (proving the path is enforced).
 - [ ] **5.3** Register `matrix_bridge` hooks (`pre_tool_call` fail-closed, `post_tool_call` → ledger) + `matrix_memory` prefetch
