@@ -208,3 +208,73 @@ Each top folder has its own `index.md`, and the root `index.md` states the layou
    (human delivery). Then **Phase 6** (memory) — 6.1→6.14 in order.
 6. Tick `CHECKLIST.md` only when each "Done when" holds; append date + commit. Update this report at
    every phase boundary.
+
+---
+
+# Phase 5 — Hermes becomes real (route re-done 2026-11-16)
+
+## Where the checklist actually stands
+`CHECKLIST.md` line 40 still reads `| 5 | Hermes becomes real | 4–5 d | 0 / 8 | Not started | — |`
+and all eight 5.x boxes are unticked. Nothing in this section is ticked: the 5.1 "Done when"
+(one run, ≥3 distinct toolsets, real artifacts) has **not** been observed yet.
+
+## What was wrong (verified by inspection and by live probes)
+1. **The daemon was a stub.** `~/.openjarvis/src/src/openjarvis/alex/hermes/runtime.py` fabricated
+   a run: it called `bridge.pre_tool_call("web.search", …)` against a fake query and returned
+   `"Hermes completed execution for: <prompt>"` without any model call. `:8642/health` said
+   "operational" the whole time. Replaced with a runtime that drives the installed
+   `hermes chat`/`hermes -z` CLI out of process, one workspace per run under
+   `Storage/Artifacts/hermes/runs/<run_id>/`, and records `api_calls`, `total_tokens`,
+   `output`, `stderr` and the artifact list. New `GET /v1/runs/{id}` for polling.
+2. **In-process import is impossible.** Importing `run_agent.AIAgent` into the Alex venv triggers
+   Hermes' bootstrap, which re-execs the process with `sys.path` pointing at `~/.hermes/hermes-agent`
+   and kills the server (`ModuleNotFoundError: openjarvis`). Hence the out-of-process CLI.
+3. **Alex's dialogue layer was eating Hermes' traffic.** `alex/matrix/api.py` computed
+   `is_internal` with `all(not (system mentions "hermes"))`, i.e. exactly backwards: requests whose
+   system prompt names Hermes got routed into `handle_utterance`, which answered with the canned
+   clarify strings in `alex/dialogue.py:60,63` ("What should it be about?",
+   "What email address should I use for {recipient}?"). Every "Hermes" answer to date was one of
+   those two strings. Now: a request is internal when it carries `tools` (an agent loop) or a
+   Hermes-identity system prompt; only Alex's own voice/desktop turns reach the dialogue layer.
+   After this fix `hermes -z "What is 2+2?…"` answers `4` from a real model.
+4. **The gateway could not carry a local model.** Two defects in `alex/matrix/gateway.py`:
+   a 45 s httpx timeout against a model that needs minutes (now 600 s for `ollama`, 45 s for cloud),
+   and no completion budget floor, so `qwen3:4b` spent the whole `max_tokens` on its reasoning block
+   and returned empty `content` (now floors `max_tokens` at 1024 for `ollama`). Ollama's default
+   4096-token context also truncated the agent prompt, so `qwen3:4b-16k` was created from the same
+   weights with `PARAMETER num_ctx 16384` and is the `ollama` route in `config/profiles.yaml`.
+
+## Evidence collected
+- `GET :8642/health` → `{"agent":"hermes-agent","runtime":"/Users/mdshabazkhan/.local/bin/hermes",
+  "toolsets":["terminal","file","search","web"]}`.
+- `hermes -z "What is 2+2?…"` → `4`; `--usage-file` reports `api_calls: 1`,
+  `model: friday-agent`, `provider: custom`, `completed: true`.
+- `POST :8700/v1/chat/completions` with a `write_file` tool schema → a real
+  `tool_calls` entry (`write_file {"path":"hello.txt","content":"hi"}`) in ~8 s.
+- No completed run yet: the three dispatched runs either hit the 1020 s subprocess cap or were
+  killed by a service restart. `Storage/Artifacts/hermes/runs/run_c6e60a25/` holds no `plan.md`.
+
+## Blocker to close 5.1
+There is **no cloud model credential on this machine** — `~/.openjarvis/src/.env` defines no
+`*_API_KEY`, and the gateway chain `freellmapi → groq → openrouter` therefore always falls through
+to local `qwen3:4b-16k`. That 4B model needs several minutes per agent turn through Hermes' system
+prompt, so a three-toolset task does not finish inside the run budget. Two ways forward:
+add one provider key (Groq's free tier carries `llama-3.3-70b-versatile`, already first in the
+`agent` chain at `config/profiles.yaml`), or raise `ALEX_HERMES_RUN_BUDGET` and accept a ~20 min
+local run. Until one of those exists, 5.1 stays unticked and 5.2–5.8 stay untouched.
+
+## Changes are in this working tree, not committed
+`~/.openjarvis/src`: `src/openjarvis/alex/hermes/runtime.py` (rewritten),
+`src/openjarvis/alex/matrix/api.py` (`is_internal`), `src/openjarvis/alex/matrix/gateway.py`
+(timeout, token floor, local model from config), `config/profiles.yaml` (`ollama.model`).
+Local model store gained `qwen3:4b-16k` (`ollama rm qwen3:4b-16k` reverts it).
+
+### Addendum (same session): a fifth defect, found after the runs kept "running" forever
+`subprocess.run(..., capture_output=True)` waits for the pipe to reach EOF. Hermes leaves child
+processes that inherit stdout and outlive the agent, so `communicate()` never returned: the child
+was already gone (`ps` showed no `hermes -z`), the run still reported `running`, and on the 1020 s
+cap the partial output was thrown away — which is why every dispatched run looked like a silent
+timeout. The runtime now redirects the child to `<workspace>/run.log` (a file always closes) and
+keeps the last 8 KB as `output`, so a timed-out run is diagnosable. Runs dispatched before this fix:
+`run_19c1de9f`, `run_c1245c7f`, `run_c6e60a25` (all `failed`/`running`, no artifacts);
+`run_294c1689` after it, still inconclusive at the time of writing.
