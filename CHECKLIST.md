@@ -21,6 +21,7 @@ Source plan: [`x-txt-open-jarvis-openjarvis-personal-a-declarative-leaf.md`](x-t
 | Repo (Trinity) | `~/Documents/dependencies/Alex` | Matrix `matrix/`, Hermes stub `hermes/`, Jarvis `jarvis/`, tools `tools/friday_mac/`, config `config/`, evals `evals/` |
 | Merged app (target) | `~/.openjarvis/src` | Has `src/openjarvis/`, `frontend/`, `desktop/`, `rust/`, `docs/` — this is where `alex/` lands |
 | Face app data | `~/.openjarvis` | `config.toml`, `server.pid`, `SOUL.md`, `MEMORY.md`, DBs |
+| **Memory & artifacts** | `/Users/mdshabazkhan/Documents/dependencies/Storage` | Short-term doc store, OKF bundle, per-task workspace, cache/tmp, janitor log — created 2026-11-15 |
 | Hermes runtime | `~/.hermes` | Real `hermes-agent/` (agent loop, toolsets, gateway), `config.yaml`, duplicate `plugins/matrix_bridge.py` |
 | Ports (target) | Face `:8000` · Matrix `:8700` · Hermes `:8642` · Tauri `:8088` | Gateways `:3001` `:20128` `:11434` |
 | Port collision to kill | `jarvis/web.py` on `:8000` (Docker `:8005`) | Phase 0.1 / 1.4 |
@@ -35,11 +36,11 @@ Source plan: [`x-txt-open-jarvis-openjarvis-personal-a-declarative-leaf.md`](x-t
 | 1 | One repo, one app | 2 d | 8 / 8 | **Done** | 2026-11-14 |
 | 2 | Ledger truth | 2 d | 7 / 7 | **Done** | 2026-11-14 |
 | 3 | Face ↔ Trinity wiring | 3 d | 3 / 8 | In progress | `2960a82f` |
-| 4 | Voice: one pipeline that never dies | 2 d | 0 / 7 | Not started | — |
+| 4 | Voice: one pipeline that never dies + human delivery | 3 d | 0 / 10 | Not started | — |
 | 5 | Hermes becomes real | 4–5 d | 0 / 8 | Not started | — |
-| 6 | Memory & personality | 2–3 d | 0 / 6 | Not started | — |
+| 6 | Memory: short-term ⇄ long-term + experience | 5 d | 0 / 14 | Not started | — |
 | 7 | Logs, dashboard & report | 1–2 d | 0 / 5 | Not started | — |
-| 8 | Hardening & acceptance | 2–3 d | 0 / 4 | Not started | — |
+| 8 | Hardening & acceptance | 3 d | 0 / 5 | Not started | — |
 
 ---
 
@@ -237,6 +238,12 @@ Target layout:
   - Done when: `alex_wake_listener.py` is deleted and wake fires once per invocation from the server.
 - [ ] **4.7** Visual state in the UI: mic pulse, countdown ring, "Listening / Thinking / Speaking"
   - Done when: the indicator tracks the server state without polling drift.
+- [ ] **4.8** Human delivery on the one TTS path: contractions, short sentences, commas honoured as real pauses, rate/pitch chosen by intent (calm for status, brisk for answers); never read punctuation aloud
+  - Done when: "done" and "failed" sound audibly different for the same words, and no reply ever speaks the word "comma".
+- [ ] **4.9** Conversational timing: first audio within ~300 ms ("right", "okay", "let me check") when work will take longer; backchannel without stealing the turn; never talk over the user
+  - Done when: a slow task gets an immediate short acknowledgement and first-audio latency is measured and recorded below.
+- [ ] **4.10** Humanistic failure and repair: no robotic error strings — acknowledge once, say what actually happened, offer the next step, and vary the phrasing so repeats do not sound canned
+  - Done when: five forced failures produce five non-identical, non-technical replies.
 
 **Phase gate**
 - [ ] Launch app → mic is live with **no** clicks
@@ -280,29 +287,58 @@ Target layout:
 
 ---
 
-## Phase 6 — Memory & personality *(≈2–3 days)*
+## Phase 6 — Memory: short-term ⇄ long-term + experience *(≈5 days)*
 
-**Goal:** Alex remembers, reuses, and sounds like Alex.
+**Goal:** Alex recalls like a person — instant recognition of people, preferences and past skills, plus a
+way back to the full story of any task — and the store cleans its own garbage. Design: `BLUEPRINT.md` §A7.
+Root: `/Users/mdshabazkhan/Documents/dependencies/Storage`.
 
-- [ ] **6.1** One memory DB (contacts, facts, preferences, procedures, pitfalls, artifacts), written only by Matrix
-  - Done when: no other process opens `memory.db` for writes.
-- [ ] **6.2** Contact book: "save this email" → reused next time; lookup by name
-  - Done when: a second mail task fills the recipient with no prompt.
-- [ ] **6.3** RAG briefs into Hermes (≤ ~1,200 tokens); prior-procedure replay
-  - Done when: the injected brief is measured under the ceiling and a repeat task reuses the procedure.
-- [ ] **6.4** Alex persona (SOUL.md merged): "Master Khan / sir", brief, outcome-first
-  - Done when: replies match the persona on every path, including errors.
-- [ ] **6.5** Stage directions from `z.txt`: greeting, "anything else?", "I'll be off then…"
-  - Done when: the script's lines appear verbatim at the right moments.
-- [ ] **6.6** Preferences with transparency ("what do you know about…", "forget that")
-  - Done when: both queries return/tombstone real memory entries.
+**Two layers, one link:** short-term = a mongo-style document store (fast, fuzzy, "who/what/have we done
+this"); long-term = the SQL ledger plus on-disk artifacts and OKF concepts (complete, ordered, evidential).
+Every experience doc carries `task_ids`; every ledger task carries `memory_ref`.
+
+- [ ] **6.1** Short-term store: one embedded document store with a mongo-style API (`find`, `insert`, `update`, `upsert`, dotted paths, secondary indexes) at `Storage/memory/knowledge.db`; collections `people, preferences, skills, experiences, artifacts, episodes`; migrate `memory.db` contacts/knowledge/pitfalls into it; written only by Matrix
+  - Done when: `find({"skills.name": "webscraping"})` returns a record in **< 20 ms** from a cold process, the migrated rows match the old file row-for-row, and no other process opens the file for writes.
+- [ ] **6.2** Long-term stays authoritative: `ledger.db` records every task/event/step/model call; every task row gains `memory_ref`; a link audit runs both ways
+  - Done when: for any experience its ledger events are one hop away, and the audit reports **0 orphans** in both directions.
+- [ ] **6.3** OKF bundle at `Storage/knowledge/`: one concept per markdown file with YAML frontmatter, `index.md` per folder, relative `links:` between concepts
+  - Done when: a person and a company exist as concept files, every `links:` target resolves, and editing one produces a reviewable diff.
+- [ ] **6.4** Artifact store: `Storage/workspace/<area>/<task-id>/` holding code, inputs, outputs and `manifest.json` (what ran, model, checksum, verified); task code never lands in the repo
+  - Done when: a finished task's code and outputs are locatable from its `task_id` alone, and the manifest matches the files on disk.
+- [ ] **6.5** Experience writer at task close: skill, subjects/entities, outcome, evidence, artifact refs, ledger ref — written once, idempotent on retry, linked both ways
+  - Done when: a completed task creates exactly one experience document, and re-running the close creates none.
+- [ ] **6.6** Hybrid retrieval: rule router → BM25 (FTS5) + local embeddings (`nomic-embed-text`) + one-hop graph expansion → RRF fusion → recency/importance/access rerank
+  - Done when: on a 30-query labelled set, hits@5 beats **both** FTS-only and vector-only, with the three numbers recorded below.
+- [ ] **6.7** The reuse flow (Dupont/Croda): resolve skill → known subjects → load preserved script → smoke-test it → modify if broken or write new; a new subject creates a new experience linked to a new ledger task
+  - Done when: "scrape dupont and croda" reuses Dupont's verified script and builds Croda's from scratch, with both experiences linked to their own tasks and artifacts.
+- [ ] **6.8** RAG brief into Hermes, ≤ ~1,200 tokens, with provenance `{source, id, age}` on every claim
+  - Done when: the brief measures under the ceiling and each claim resolves to a real memory or ledger row.
+- [ ] **6.9** Contact book + standing preferences on the short-term store ("save this email", "my favourite place is…"), reused without asking
+  - Done when: a second mail task fills the recipient with no prompt, and the preference is quoted back correctly.
+- [ ] **6.10** Transparency: "what do you know about me?" lists real entries; "forget that" tombstones the entry and it stops appearing in retrieval
+  - Done when: both work and the tombstone survives a restart.
+- [ ] **6.11** Persona + stage directions: SOUL.md merged; greeting, "anything else?", "I'll be off then…" verbatim; brief, outcome-first, including errors
+  - Done when: replies match the persona on every path, errors included.
+- [ ] **6.12** Janitor: TTL policies (`tmp/` 24 h, `cache/` 7 d, unreferenced failed artifacts 14 d), orphan scan + quarantine, size budget, `VACUUM`, `--dry-run` default, append-only `Storage/janitor.log`
+  - Done when: a dry run lists exactly the deletable set; a real run reclaims the space and deletes **nothing** referenced by a task, experience or concept.
+- [ ] **6.13** Backup + restore drill for `knowledge.db`, `ledger.db`, `knowledge/` and `workspace/`: restore into a temp root and read one experience back
+  - Done when: the restored experience and its artifact match the original byte-for-byte.
+- [ ] **6.14** Growth control: embeddings regenerate only for changed documents; index rebuild is resumable
+  - Done when: reindexing after one change embeds exactly one document.
 
 **Phase gate**
-- [ ] Second run of the same task uses noticeably fewer tokens (before/after numbers recorded below)
-- [ ] Saved contact is used automatically next time
+- [ ] "mail max" uses the stored address with no prompt
+- [ ] "what did we do two months ago?" returns a real task with dates, outcome and artifact paths
+- [ ] A repeat task reuses the prior procedure/script (token numbers below)
+- [ ] Janitor dry run + real run both clean; nothing referenced was lost
+- [ ] Restore drill passes into a temp root
 - [ ] Greeting/sign-off match the script exactly
 
 **Token comparison:** first run: ____ · second run: ____ · delta: ____
+
+**Retrieval hits@5:** FTS-only ____ · vector-only ____ · hybrid ____
+
+**First-audio latency:** ____ ms
 
 ---
 
@@ -340,6 +376,8 @@ Target layout:
   - Done when: memory pressure never reaches red; samples recorded below.
 - [ ] **8.4** Docs: `BLUEPRINT.md` (Part A), `RUNBOOK.md` (start/stop/ports), `CONFIG.md`
   - Done when: a reader can start, stop, and reconfigure without reading source.
+- [ ] **8.5** Storage health: janitor scheduled (idle + daily, never during a task), retention honoured, `Storage/` size reported by `alex status`, no unbounded growth through the soak; one orphan-quarantine drill
+  - Done when: a 1-hour mixed session leaves `Storage/` inside budget, the janitor log shows scheduled runs, and a deliberately orphaned artifact is quarantined rather than deleted.
 
 **Phase gate**
 - [ ] All `z.txt` scenarios pass unattended
