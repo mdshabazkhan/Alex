@@ -14,7 +14,7 @@ _Last updated: 2026-11-14 (unsupervised session). Read this top box first._
 | 1 One repo, one app | 8 / 8 | **Done** | `05b06464` |
 | 2 Ledger truth | 7 / 7 | **Done** (+3 bug fixes) | `1406106a`, `aec2f506`, `d9e5e9b9` |
 | 3 Face ↔ Trinity wiring | 6 / 8 | **In progress** | `6e7f3a56` |
-| 4 Voice + human delivery | 3 / 10 | **In progress** | `3630cfad` |
+| 4 Voice + human delivery | 3 / 10 | **In progress** (4.2/4.6 built, not yet observed live) | `2983ca83` |
 | 5 Hermes becomes real | 0 / 8 | Not started | — |
 | 6 Memory: short-term ⇄ long-term | 0 / 14 | Not started | — |
 | 7 Logs, dashboard & report | 0 / 5 | Not started | — |
@@ -50,6 +50,10 @@ Services: Face `:8000`, Matrix `:8700`, Hermes `:8642` — all `/health` green.
 - **Alex actually says the line, and knows it said it.** `emit()` speaks through the one voice path and
   tells the mic session what was said, so a transcript of Alex's own voice is dropped as an echo while a
   real interruption survives.
+- **Frontend drives the mic; wake word lives in the server.** `useSpeech`/`MicButton` call
+  `/v1/alex/listening/*` on the Face, and `alex/face/wake.py` is started and stopped with the server;
+  the standalone wake daemon is deleted. Both paths verified over HTTP — the live 10-turn mic test and a
+  real wake-phrase trigger still need the app and a microphone.
 - **One speaker.** `alex/face/voice.py` is the only thing that plays audio: a single queue, one
   line at a time, and a barge-in that terminates the current line and drops what was waiting. The
   four previous `say` call sites delegate to it, so two replies can no longer talk over each other.
