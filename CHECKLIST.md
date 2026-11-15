@@ -36,7 +36,7 @@ Source plan: [`x-txt-open-jarvis-openjarvis-personal-a-declarative-leaf.md`](x-t
 | 1 | One repo, one app | 2 d | 8 / 8 | **Done** | 2026-11-14 |
 | 2 | Ledger truth | 2 d | 7 / 7 | **Done** | 2026-11-14 |
 | 3 | Face ↔ Trinity wiring | 3 d | 6 / 8 | In progress | `6e7f3a56` |
-| 4 | Voice: one pipeline that never dies + human delivery | 3 d | 0 / 10 | Not started | — |
+| 4 | Voice: one pipeline that never dies + human delivery | 3 d | 1 / 10 | In progress | `f07b7a63` |
 | 5 | Hermes becomes real | 4–5 d | 0 / 8 | Not started | — |
 | 6 | Memory: short-term ⇄ long-term + experience | 5 d | 0 / 14 | Not started | — |
 | 7 | Logs, dashboard & report | 1–2 d | 0 / 5 | Not started | — |
@@ -244,16 +244,19 @@ Target layout:
 
 **Goal:** exactly one state machine, one STT, one TTS, and a mic that works on turn 11.
 
-- [ ] **4.1** Server mic state machine: `start → listening → (speech) → listening → (5 s silence OR "alex reply") → stop → transcribe → idle`; expose `state`, `silence_remaining`, `transcript_partial`
+- [x] **4.1** Server mic state machine: `start → listening → (speech) → listening → (5 s silence OR "alex reply") → stop → transcribe → idle`; expose `state`, `silence_remaining`, `transcript_partial` — 2026-11-15
   - Done when: the API reports each field correctly through a full cycle.
+  - **Result:** `alex/face/listening.py` owns the rules; the shell only feeds it levels and transcripts. Live over HTTP: `start` → `listening / 5.0 / heard=false`; a voice frame → `heard=true`; a partial → `action=partial` with the text retained; `"… alex reply"` → `action=submit`, state `thinking`, and the stopword stripped from the transcript; `stop` → the final transcript. `scripts/alex_listening_check.py` drives a full cycle with an injected clock: **27/27**, including that silence alone never submits (nothing was heard), each voice frame restarts the 5 s countdown, and a late frame extends a paused turn.
+  - **Note:** the mic is not yet wired into the UI (that is 4.2), so this proves the rules and the API, not a live microphone.
 - [ ] **4.2** Frontend: single `useSpeech` drives the state machine; auto-start on launch; auto-return to listening after every answer; reset `_mic_auto_stopped`/`_mic_has_spoken`
   - Done when: 10 consecutive turns leave the mic live and listening.
 - [ ] **4.3** One TTS path: server `say -v Samantha` (queue + `pkill say` on barge-in); browser only as fallback; remove the other speak functions
   - Done when: one code path can speak, and only one process produces audio.
 - [ ] **4.4** Barge-in: "listen" → kill TTS + clear buffer + LISTENING; "alex reply" → send now; 5 s silence → send
   - Done when: all three stopwords behave and are covered by a test.
-- [ ] **4.5** Echo suppression: clear buffer while speaking; drop transcripts ≥ 0.45 similar to the last spoken line
+- [ ] **4.5** Echo suppression: clear buffer while speaking; drop transcripts ≥ 0.45 similar to the last spoken line — **logic built and tested, not yet in the live pipeline**
   - Done when: Alex's own speech never becomes a transcript.
+  - **Result so far:** `ListeningSession.is_echo()` drops a transcript at ≥0.45 similarity to the last spoken line, only while speaking and only within 20 s. Tested: Alex's own sentence is dropped (`action=echo`, counter incremented, partial untouched); a genuinely different sentence during speech is kept; an interruption ("listen") is never mistaken for an echo; and an old line stops suppressing after 20 s.
 - [ ] **4.6** Fold wake word into the server (`openwakeword`, `faster-whisper` fallback); delete the standalone listener
   - Done when: `alex_wake_listener.py` is deleted and wake fires once per invocation from the server.
 - [ ] **4.7** Visual state in the UI: mic pulse, countdown ring, "Listening / Thinking / Speaking"

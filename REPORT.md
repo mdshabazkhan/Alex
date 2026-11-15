@@ -14,7 +14,7 @@ _Last updated: 2026-11-14 (unsupervised session). Read this top box first._
 | 1 One repo, one app | 8 / 8 | **Done** | `05b06464` |
 | 2 Ledger truth | 7 / 7 | **Done** (+3 bug fixes) | `1406106a`, `aec2f506`, `d9e5e9b9` |
 | 3 Face ↔ Trinity wiring | 6 / 8 | **In progress** | `6e7f3a56` |
-| 4 Voice + human delivery | 0 / 10 | Not started | — |
+| 4 Voice + human delivery | 1 / 10 | **In progress** | `f07b7a63` |
 | 5 Hermes becomes real | 0 / 8 | Not started | — |
 | 6 Memory: short-term ⇄ long-term | 0 / 14 | Not started | — |
 | 7 Logs, dashboard & report | 0 / 5 | Not started | — |
@@ -47,6 +47,10 @@ Services: Face `:8000`, Matrix `:8700`, Hermes `:8642` — all `/health` green.
   allowed moments, an unverified `task_done` suppressed, everything else silent. Every line is
   recorded as a `speech` event, so what Alex said is auditable, and served to the shell at
   `/api/speech/pending`.
+- **One microphone state machine.** `alex/face/listening.py` owns the cycle — 5 s silence, "alex
+  reply" to submit, "listen" to barge in, echo suppression at 0.45 similarity — and exposes it at
+  `/v1/alex/listening/*`, so the browser can no longer disagree with the server. Tested with an
+  injected clock: 27/27, and verified live over HTTP.
 - **Two tasks at once, and you can tell them apart.** Every update names its task in a sentence
   someone would actually say ("On it — short note about solar power.", "Done — PDF of my resume."),
   long runs emit discrete milestones without speaking them, and a second concurrent request is
@@ -131,7 +135,8 @@ Each top folder has its own `index.md`, and the root `index.md` states the layou
 | "Gold rate today" is model knowledge, not a live rate | `quick_answer` has no browsing | Phase 5 (Hermes/browser) |
 | Approval-required tools are blocked, not paused | fail-closed until parking exists | 5.5 |
 | UI does not render `evidence` or call real clear | Logs page rewrite | 7.1 / 7.2 |
-| Voice/STT/TTS untouched | needs you at the machine to verify | Phase 4 |
+| Mic not yet wired into the UI | 4.1 proved the rules and the API, not a live microphone | 4.2 |
+| One TTS path not yet collapsed | the duplicate speak functions still exist | 4.3 |
 | Memory system designed, not built | Phase 6, after the voice pipeline | Phase 6 |
 
 ---
@@ -154,6 +159,9 @@ Each top folder has its own `index.md`, and the root `index.md` states the layou
   `alex.action=close_app`; `cargo check` and `tsc` both exit 0.
 - Classifier guard set — `scripts/alex_classify_check.py`: **135/135** (123 utterances: 39 reflex,
   44 quick, 40 complex; plus 12 argument checks), exit 0.
+- Mic state machine — `scripts/alex_listening_check.py`: **27/27**, exit 0, including "silence alone
+  never submits", "each voice frame restarts the countdown", "alex reply submits and is stripped",
+  "listen is a barge-in not an echo", and "an old spoken line stops suppressing after 20 s".
 - Storage tree — created and listed (11 directories, 2 OKF indexes, 239 GiB free).
 
 ## Not verified (be sceptical here)
@@ -175,6 +183,8 @@ Each top folder has its own `index.md`, and the root `index.md` states the layou
    gate audit at the end of Phase 3 in `CHECKLIST.md`: four items are blocked on Phase 5 (real Hermes,
    live web answers) and on the ≥100-utterance guard set, not on wiring.
 4. Ask **"turn off bluetooth"** to close 3.2 on real hardware.
-5. Then **Phase 4** (voice + human delivery), then **Phase 6** (memory) — 6.1→6.14 in order.
+5. Then **Phase 4**: 4.1 is done (rules + API); next is **4.2** (frontend drives the state machine),
+   then 4.3 (collapse to one TTS path) and 4.5 (echo suppression in the live pipeline). Then
+   **Phase 6** (memory) — 6.1→6.14 in order.
 6. Tick `CHECKLIST.md` only when each "Done when" holds; append date + commit. Update this report at
    every phase boundary.
