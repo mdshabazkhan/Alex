@@ -297,14 +297,14 @@ Root: `/Users/mdshabazkhan/Documents/dependencies/Storage`.
 this"); long-term = the SQL ledger plus on-disk artifacts and OKF concepts (complete, ordered, evidential).
 Every experience doc carries `task_ids`; every ledger task carries `memory_ref`.
 
-- [ ] **6.1** Short-term store: one embedded document store with a mongo-style API (`find`, `insert`, `update`, `upsert`, dotted paths, secondary indexes) at `Storage/memory/knowledge.db`; collections `people, preferences, skills, experiences, artifacts, episodes`; migrate `memory.db` contacts/knowledge/pitfalls into it; written only by Matrix
+- [ ] **6.1** Short-term store: one embedded document store with a mongo-style API (`find`, `insert`, `update`, `upsert`, dotted paths, secondary indexes) at `Storage/mongodb/knowledge.db`; collections `people, preferences, skills, experiences, artifacts, episodes`; migrate `memory.db` contacts/knowledge/pitfalls into it; written only by Matrix
   - Done when: `find({"skills.name": "webscraping"})` returns a record in **< 20 ms** from a cold process, the migrated rows match the old file row-for-row, and no other process opens the file for writes.
 - [ ] **6.2** Long-term stays authoritative: `ledger.db` records every task/event/step/model call; every task row gains `memory_ref`; a link audit runs both ways
   - Done when: for any experience its ledger events are one hop away, and the audit reports **0 orphans** in both directions.
 - [ ] **6.3** OKF bundle at `Storage/knowledge/`: one concept per markdown file with YAML frontmatter, `index.md` per folder, relative `links:` between concepts
   - Done when: a person and a company exist as concept files, every `links:` target resolves, and editing one produces a reviewable diff.
-- [ ] **6.4** Artifact store: `Storage/workspace/<area>/<task-id>/` holding code, inputs, outputs and `manifest.json` (what ran, model, checksum, verified); task code never lands in the repo
-  - Done when: a finished task's code and outputs are locatable from its `task_id` alone, and the manifest matches the files on disk.
+- [ ] **6.4** Artifact router: deliverables filed by type under `Storage/Artifacts/{images,videos,texts,word_files,ppts,pdfs}/`, reusable code under `Storage/Artifacts/code/<task-id>/` with `manifest.json`, one-off scripts executed from `Storage/temp/temp_code/` and never filed as output
+  - Done when: "make a PDF on X" runs `<ts>_create_pdf.py` from `temp/temp_code/` and leaves only `Artifacts/pdfs/<ts>_x.pdf` behind, locatable from its `task_id`, with the manifest matching the files on disk.
 - [ ] **6.5** Experience writer at task close: skill, subjects/entities, outcome, evidence, artifact refs, ledger ref — written once, idempotent on retry, linked both ways
   - Done when: a completed task creates exactly one experience document, and re-running the close creates none.
 - [ ] **6.6** Hybrid retrieval: rule router → BM25 (FTS5) + local embeddings (`nomic-embed-text`) + one-hop graph expansion → RRF fusion → recency/importance/access rerank
@@ -319,9 +319,9 @@ Every experience doc carries `task_ids`; every ledger task carries `memory_ref`.
   - Done when: both work and the tombstone survives a restart.
 - [ ] **6.11** Persona + stage directions: SOUL.md merged; greeting, "anything else?", "I'll be off then…" verbatim; brief, outcome-first, including errors
   - Done when: replies match the persona on every path, errors included.
-- [ ] **6.12** Janitor: TTL policies (`tmp/` 24 h, `cache/` 7 d, unreferenced failed artifacts 14 d), orphan scan + quarantine, size budget, `VACUUM`, `--dry-run` default, append-only `Storage/janitor.log`
-  - Done when: a dry run lists exactly the deletable set; a real run reclaims the space and deletes **nothing** referenced by a task, experience or concept.
-- [ ] **6.13** Backup + restore drill for `knowledge.db`, `ledger.db`, `knowledge/` and `workspace/`: restore into a temp root and read one experience back
+- [ ] **6.12** Janitor over the one `temp/` root: **daily** sweep of `temp/voice/`, `temp/logs/` and `temp/temp_code/`, 24 h for `temp/scratch/`, 7 d for `temp/cache/`; `Artifacts/`, `knowledge/`, `sql/` and `mongodb/` are never swept; orphan scan + quarantine; size budget; `VACUUM`; `--dry-run` default; log to `temp/logs/janitor.log` **and** a ledger event so the record outlives the log; skip any folder a live task is writing to
+  - Done when: a dry run lists exactly the deletable set; a real run reclaims the space and deletes **nothing** referenced by a task, experience or concept; a recording and a temp script from yesterday are gone; an artifact from yesterday is untouched.
+- [ ] **6.13** Backup + restore drill for `mongodb/knowledge.db`, `sql/ledger.db`, `knowledge/` and `Artifacts/`: restore into a temp root and read one experience back
   - Done when: the restored experience and its artifact match the original byte-for-byte.
 - [ ] **6.14** Growth control: embeddings regenerate only for changed documents; index rebuild is resumable
   - Done when: reindexing after one change embeds exactly one document.

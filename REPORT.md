@@ -80,15 +80,32 @@ rerank → ≤1,200-token brief with provenance on every claim.
 **The Dupont/Croda loop** is written out step by step in §A7; the rule that makes it real is that a task
 is not "done" until its experience is written and linked to its ledger task and artifacts.
 
-**Storage root** `/Users/mdshabazkhan/Documents/dependencies/Storage` already exists and is organised:
-`knowledge/` (people, companies, skills, preferences), `memory/`, `workspace/`, `cache/`, `tmp/`,
-`backups/`, `archive/`, with an OKF `index.md` stating the layout and the rules.
+**Storage root** `/Users/mdshabazkhan/Documents/dependencies/Storage` exists and is organised so you can open
+it by hand:
+
+```
+Artifacts/{images,videos,texts,word_files,ppts,pdfs,code}   durable — kept until you delete it
+temp/{temp_code,voice,logs,cache,scratch}                   disposable — swept daily
+sql/ledger.db    long-term truth      mongodb/knowledge.db   short-term recall
+knowledge/       OKF bundle           backups/  archive/    safety and cold storage
+```
+
+The one rule that places every file: **the answer** goes to `Artifacts/<type>/`; **a step towards the
+answer** goes to `temp/`; **a fact** goes to `knowledge/` or `mongodb/`; **the record of what happened**
+goes to `sql/`. "Make a PDF on X" therefore runs `temp/temp_code/<ts>_create_pdf.py` and files
+`Artifacts/pdfs/<ts>_x.pdf` — the script is throwaway, the PDF is not.
+
+Each top folder has its own `index.md`, and the root `index.md` states the layout, the naming convention
+(`<timestamp>_<what>.<ext>`) and the daily sweep policy.
 
 **Decisions you should know about**
 
-- **No `mongod` daemon.** `knowledge.db` is one SQLite file exposing a mongo-style API (`find`, dotted
-  paths, indexes). Phase 1 removed every container; a fourth daemon would add a port and a backup
-  surface for no benefit at this data size. Swapping in real MongoDB later touches one class.
+- **`mongodb/` holds an embedded document store, not a `mongod` daemon.** `knowledge.db` is one SQLite file
+  exposing a mongo-style API (`find`, dotted paths, indexes). Phase 1 removed every container; a fourth
+  daemon would add a port, ~200 MB of RSS (against a 16 GB soak target) and a backup surface for no benefit
+  at this data size. Swapping in real MongoDB later touches one class — say the word and I'll do it.
+- **`sql/` is SQLite, not Postgres.** Same reasoning; `pgvector` is the documented swap if the corpus ever
+  reaches millions of rows.
 - **No vector database.** Thousands of rows, not millions: SQLite + numpy cosine is faster than a service.
 - **`memory.db` retires** — its contacts/knowledge/pitfalls migrate into `knowledge.db` in 6.1.
 - **The janitor is conservative by default:** `--dry-run` first, never deletes anything referenced by a
