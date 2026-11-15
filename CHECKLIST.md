@@ -36,7 +36,7 @@ Source plan: [`x-txt-open-jarvis-openjarvis-personal-a-declarative-leaf.md`](x-t
 | 1 | One repo, one app | 2 d | 8 / 8 | **Done** | 2026-11-14 |
 | 2 | Ledger truth | 2 d | 7 / 7 | **Done** | 2026-11-14 |
 | 3 | Face ↔ Trinity wiring | 3 d | 6 / 8 | In progress | `6e7f3a56` |
-| 4 | Voice: one pipeline that never dies + human delivery | 3 d | 1 / 10 | In progress | `f07b7a63` |
+| 4 | Voice: one pipeline that never dies + human delivery | 3 d | 2 / 10 | In progress | `d2e5d45d` |
 | 5 | Hermes becomes real | 4–5 d | 0 / 8 | Not started | — |
 | 6 | Memory: short-term ⇄ long-term + experience | 5 d | 0 / 14 | Not started | — |
 | 7 | Logs, dashboard & report | 1–2 d | 0 / 5 | Not started | — |
@@ -250,8 +250,10 @@ Target layout:
   - **Note:** the mic is not yet wired into the UI (that is 4.2), so this proves the rules and the API, not a live microphone.
 - [ ] **4.2** Frontend: single `useSpeech` drives the state machine; auto-start on launch; auto-return to listening after every answer; reset `_mic_auto_stopped`/`_mic_has_spoken`
   - Done when: 10 consecutive turns leave the mic live and listening.
-- [ ] **4.3** One TTS path: server `say -v Samantha` (queue + `pkill say` on barge-in); browser only as fallback; remove the other speak functions
+- [x] **4.3** One TTS path: server `say -v Samantha` (queue + `pkill say` on barge-in); browser only as fallback; remove the other speak functions — 2026-11-15 · `d2e5d45d`
   - Done when: one code path can speak, and only one process produces audio.
+  - **Result:** four `say` call sites collapsed into `alex/face/voice.py`. One worker thread plays one line at a time (`Popen` + `wait`), `barge_in()` terminates the current process and invalidates everything queued via a generation counter, and the old sites (Face route, two barge-in handlers, Matrix stop endpoint) now delegate. `scripts/alex_voice_check.py` → **11/11**: queued lines never overlap, barge-in silences within 1 s and the queued line is never heard, and exactly one file in `src/` spawns `say`. Live: `/v1/alex/voice/say` reports `speaking: true` then clears with `spoken` incremented; `/api/alex/stop_speaking` returns `silenced`.
+  - **Note on the false alarm:** my first live probe read status at 2.5 s and looked like a hang. `say` genuinely takes ~3.0 s for that sentence, so the speaker was correct and the probe was early — measured, not assumed, before changing code.
 - [ ] **4.4** Barge-in: "listen" → kill TTS + clear buffer + LISTENING; "alex reply" → send now; 5 s silence → send
   - Done when: all three stopwords behave and are covered by a test.
 - [ ] **4.5** Echo suppression: clear buffer while speaking; drop transcripts ≥ 0.45 similar to the last spoken line — **logic built and tested, not yet in the live pipeline**

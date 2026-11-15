@@ -14,7 +14,7 @@ _Last updated: 2026-11-14 (unsupervised session). Read this top box first._
 | 1 One repo, one app | 8 / 8 | **Done** | `05b06464` |
 | 2 Ledger truth | 7 / 7 | **Done** (+3 bug fixes) | `1406106a`, `aec2f506`, `d9e5e9b9` |
 | 3 Face ↔ Trinity wiring | 6 / 8 | **In progress** | `6e7f3a56` |
-| 4 Voice + human delivery | 1 / 10 | **In progress** | `f07b7a63` |
+| 4 Voice + human delivery | 2 / 10 | **In progress** | `d2e5d45d` |
 | 5 Hermes becomes real | 0 / 8 | Not started | — |
 | 6 Memory: short-term ⇄ long-term | 0 / 14 | Not started | — |
 | 7 Logs, dashboard & report | 0 / 5 | Not started | — |
@@ -47,6 +47,9 @@ Services: Face `:8000`, Matrix `:8700`, Hermes `:8642` — all `/health` green.
   allowed moments, an unverified `task_done` suppressed, everything else silent. Every line is
   recorded as a `speech` event, so what Alex said is auditable, and served to the shell at
   `/api/speech/pending`.
+- **One speaker.** `alex/face/voice.py` is the only thing that plays audio: a single queue, one
+  line at a time, and a barge-in that terminates the current line and drops what was waiting. The
+  four previous `say` call sites delegate to it, so two replies can no longer talk over each other.
 - **One microphone state machine.** `alex/face/listening.py` owns the cycle — 5 s silence, "alex
   reply" to submit, "listen" to barge in, echo suppression at 0.45 similarity — and exposes it at
   `/v1/alex/listening/*`, so the browser can no longer disagree with the server. Tested with an
@@ -136,7 +139,7 @@ Each top folder has its own `index.md`, and the root `index.md` states the layou
 | Approval-required tools are blocked, not paused | fail-closed until parking exists | 5.5 |
 | UI does not render `evidence` or call real clear | Logs page rewrite | 7.1 / 7.2 |
 | Mic not yet wired into the UI | 4.1 proved the rules and the API, not a live microphone | 4.2 |
-| One TTS path not yet collapsed | the duplicate speak functions still exist | 4.3 |
+| Browser speech fallback not wired | 4.3 removed the duplicates; the fallback is 4.2's job | 4.2 |
 | Memory system designed, not built | Phase 6, after the voice pipeline | Phase 6 |
 
 ---
@@ -162,6 +165,9 @@ Each top folder has its own `index.md`, and the root `index.md` states the layou
 - Mic state machine — `scripts/alex_listening_check.py`: **27/27**, exit 0, including "silence alone
   never submits", "each voice frame restarts the countdown", "alex reply submits and is stripped",
   "listen is a barge-in not an echo", and "an old spoken line stops suppressing after 20 s".
+- Voice path — `scripts/alex_voice_check.py`: **11/11**, exit 0 (queue never overlaps, barge-in
+  silences and drops the queue, exactly one `say` call site); live `/v1/alex/voice/say` and
+  `/api/alex/stop_speaking` both behave.
 - Storage tree — created and listed (11 directories, 2 OKF indexes, 239 GiB free).
 
 ## Not verified (be sceptical here)
