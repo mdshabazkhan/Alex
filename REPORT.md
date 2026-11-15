@@ -69,8 +69,8 @@ Nothing is implemented yet — this is the plan, the blueprint and the storage t
 
 | Layer | Store | Answers | Budget |
 |---|---|---|---|
-| Short-term | `Storage/memory/knowledge.db` — mongo-style document store | who/what/where, preferences, "have we done this", where the code lives | < 20 ms, no model call |
-| Long-term | `ledger.db` (SQL) + `Storage/workspace/` | what happened, when, in what order, with evidence and code | 50–200 ms |
+| Short-term | `Storage/mongodb/knowledge.db` — mongo-style document store | who/what/where, preferences, "have we done this", where the code lives | < 20 ms, no model call |
+| Long-term | `Storage/sql/ledger.db` + `Storage/Artifacts/` | what happened, when, in what order, with evidence and code | 50–200 ms |
 | Curated | `Storage/knowledge/` — OKF markdown bundle | stable facts written once, read directly | a file read |
 
 **Retrieval** is a hybrid, because your data is deliberately scattered: rule router → BM25 (FTS5) +
