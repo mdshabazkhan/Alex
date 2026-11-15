@@ -36,7 +36,7 @@ Source plan: [`x-txt-open-jarvis-openjarvis-personal-a-declarative-leaf.md`](x-t
 | 1 | One repo, one app | 2 d | 8 / 8 | **Done** | 2026-11-14 |
 | 2 | Ledger truth | 2 d | 7 / 7 | **Done** | 2026-11-14 |
 | 3 | Face ↔ Trinity wiring | 3 d | 6 / 8 | In progress | `6e7f3a56` |
-| 4 | Voice: one pipeline that never dies + human delivery | 3 d | 2 / 10 | In progress | `d2e5d45d` |
+| 4 | Voice: one pipeline that never dies + human delivery | 3 d | 3 / 10 | In progress | `3630cfad` |
 | 5 | Hermes becomes real | 4–5 d | 0 / 8 | Not started | — |
 | 6 | Memory: short-term ⇄ long-term + experience | 5 d | 0 / 14 | Not started | — |
 | 7 | Logs, dashboard & report | 1–2 d | 0 / 5 | Not started | — |
@@ -256,9 +256,10 @@ Target layout:
   - **Note on the false alarm:** my first live probe read status at 2.5 s and looked like a hang. `say` genuinely takes ~3.0 s for that sentence, so the speaker was correct and the probe was early — measured, not assumed, before changing code.
 - [ ] **4.4** Barge-in: "listen" → kill TTS + clear buffer + LISTENING; "alex reply" → send now; 5 s silence → send
   - Done when: all three stopwords behave and are covered by a test.
-- [ ] **4.5** Echo suppression: clear buffer while speaking; drop transcripts ≥ 0.45 similar to the last spoken line — **logic built and tested, not yet in the live pipeline**
+- [x] **4.5** Echo suppression: clear buffer while speaking; drop transcripts ≥ 0.45 similar to the last spoken line — 2026-11-15 · `3630cfad`
   - Done when: Alex's own speech never becomes a transcript.
-  - **Result so far:** `ListeningSession.is_echo()` drops a transcript at ≥0.45 similarity to the last spoken line, only while speaking and only within 20 s. Tested: Alex's own sentence is dropped (`action=echo`, counter incremented, partial untouched); a genuinely different sentence during speech is kept; an interruption ("listen") is never mistaken for an echo; and an old line stops suppressing after 20 s.
+  - **Result:** wired into the live path. `speech_policy.emit()` recorded a line but **nothing played it** and the mic never knew a line had been spoken, so echo suppression could never fire. It now speaks through the single voice path and calls `note_speaking()` on the session. Verified end to end: `"Done — wind note. Saved the note."` is spoken, the session records it, the same sentence fed back returns `action=echo` (`dropped_echoes=1`, partial untouched), a genuinely different sentence during speech is kept as the user's, and the speaker clears to `spoken: 1`.
+  - **Threshold behaviour:** ≥0.45 similarity, only within 20 s of the line, and `"listen"` bypasses the check so an interruption is never mistaken for an echo.
 - [ ] **4.6** Fold wake word into the server (`openwakeword`, `faster-whisper` fallback); delete the standalone listener
   - Done when: `alex_wake_listener.py` is deleted and wake fires once per invocation from the server.
 - [ ] **4.7** Visual state in the UI: mic pulse, countdown ring, "Listening / Thinking / Speaking"

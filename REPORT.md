@@ -14,7 +14,7 @@ _Last updated: 2026-11-14 (unsupervised session). Read this top box first._
 | 1 One repo, one app | 8 / 8 | **Done** | `05b06464` |
 | 2 Ledger truth | 7 / 7 | **Done** (+3 bug fixes) | `1406106a`, `aec2f506`, `d9e5e9b9` |
 | 3 Face ↔ Trinity wiring | 6 / 8 | **In progress** | `6e7f3a56` |
-| 4 Voice + human delivery | 2 / 10 | **In progress** | `d2e5d45d` |
+| 4 Voice + human delivery | 3 / 10 | **In progress** | `3630cfad` |
 | 5 Hermes becomes real | 0 / 8 | Not started | — |
 | 6 Memory: short-term ⇄ long-term | 0 / 14 | Not started | — |
 | 7 Logs, dashboard & report | 0 / 5 | Not started | — |
@@ -47,6 +47,9 @@ Services: Face `:8000`, Matrix `:8700`, Hermes `:8642` — all `/health` green.
   allowed moments, an unverified `task_done` suppressed, everything else silent. Every line is
   recorded as a `speech` event, so what Alex said is auditable, and served to the shell at
   `/api/speech/pending`.
+- **Alex actually says the line, and knows it said it.** `emit()` speaks through the one voice path and
+  tells the mic session what was said, so a transcript of Alex's own voice is dropped as an echo while a
+  real interruption survives.
 - **One speaker.** `alex/face/voice.py` is the only thing that plays audio: a single queue, one
   line at a time, and a barge-in that terminates the current line and drops what was waiting. The
   four previous `say` call sites delegate to it, so two replies can no longer talk over each other.
@@ -189,8 +192,10 @@ Each top folder has its own `index.md`, and the root `index.md` states the layou
    gate audit at the end of Phase 3 in `CHECKLIST.md`: four items are blocked on Phase 5 (real Hermes,
    live web answers) and on the ≥100-utterance guard set, not on wiring.
 4. Ask **"turn off bluetooth"** to close 3.2 on real hardware.
-5. Then **Phase 4**: 4.1 is done (rules + API); next is **4.2** (frontend drives the state machine),
-   then 4.3 (collapse to one TTS path) and 4.5 (echo suppression in the live pipeline). Then
-   **Phase 6** (memory) — 6.1→6.14 in order.
+5. **Phase 4 status:** 4.1, 4.3 and 4.5 are done. Next is **4.2** — the frontend must drive
+   `/v1/alex/listening/*` and keep the mic live for 10 consecutive turns. That needs the desktop app
+   running with a microphone, so it cannot be verified headlessly; do it at the machine, then tick it.
+   After that: 4.4 (stopwords in the UI), 4.6 (wake word into the server), 4.7 (visual state), 4.8–4.10
+   (human delivery). Then **Phase 6** (memory) — 6.1→6.14 in order.
 6. Tick `CHECKLIST.md` only when each "Done when" holds; append date + commit. Update this report at
    every phase boundary.
