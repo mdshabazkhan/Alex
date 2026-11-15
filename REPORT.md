@@ -47,9 +47,10 @@ Services: Face `:8000`, Matrix `:8700`, Hermes `:8642` — all `/health` green.
   allowed moments, an unverified `task_done` suppressed, everything else silent. Every line is
   recorded as a `speech` event, so what Alex said is auditable, and served to the shell at
   `/api/speech/pending`.
-- **Two tasks at once, and you can tell them apart.** Each update is prefixed with the task's
-  short name ("Short note solar power: on it."), long runs emit discrete milestones without
-  speaking them, and a second request is reported as queued rather than silently parallel.
+- **Two tasks at once, and you can tell them apart.** Every update names its task in a sentence
+  someone would actually say ("On it — short note about solar power.", "Done — PDF of my resume."),
+  long runs emit discrete milestones without speaking them, and a second concurrent request is
+  reported as running alongside the first rather than falsely as "queued".
 
 ## Bugs found and fixed so far
 
@@ -148,8 +149,11 @@ Each top folder has its own `index.md`, and the root `index.md` states the layou
   answers via Ollama (`tokens_in=51, tokens_out=128`); slot question → task `T-20261115-29EC00`.
 - Phase 3 (speech) — two concurrent tasks: speech moments exactly `{task_started, task_done}`,
   3 milestones each, every line task-named and distinct; `/api/speech/pending` returned 3 with
-  `next_after_id=97`; live queue check `queued=false` then `queued=true`; SSE for "goodbye alex"
-  carried `alex.action=close_app`; `cargo check` and `tsc` both exit 0.
+  `next_after_id=97`; live concurrency check `parallel=false` then `parallel=true`
+  ("Starting that alongside the other one"); SSE for "goodbye alex" carried
+  `alex.action=close_app`; `cargo check` and `tsc` both exit 0.
+- Classifier guard set — `scripts/alex_classify_check.py`: **135/135** (123 utterances: 39 reflex,
+  44 quick, 40 complex; plus 12 argument checks), exit 0.
 - Storage tree — created and listed (11 directories, 2 OKF indexes, 239 GiB free).
 
 ## Not verified (be sceptical here)
