@@ -13,7 +13,7 @@ _Last updated: 2026-11-14 (unsupervised session). Read this top box first._
 | 0 Freeze & baseline | 4 / 4 | **Done** | `084274eb` |
 | 1 One repo, one app | 8 / 8 | **Done** | `05b06464` |
 | 2 Ledger truth | 7 / 7 | **Done** (+3 bug fixes) | `1406106a`, `aec2f506`, `d9e5e9b9` |
-| 3 Face ↔ Trinity wiring | 3 / 8 | **In progress** | `2960a82f` |
+| 3 Face ↔ Trinity wiring | 6 / 8 | **In progress** | `6e7f3a56` |
 | 4 Voice + human delivery | 0 / 10 | Not started | — |
 | 5 Hermes becomes real | 0 / 8 | Not started | — |
 | 6 Memory: short-term ⇄ long-term | 0 / 14 | Not started | — |
@@ -43,6 +43,13 @@ Services: Face `:8000`, Matrix `:8700`, Hermes `:8642` — all `/health` green.
   essay, the "₹7,850" gold rate and "Understood, Master Khan" are gone.
 - **Answers survive broken gateways.** Hosted gateways return 401 (no keys in the native
   process); the gateway falls back to local Ollama, so Alex still answers.
+- **Alex talks only when it should.** `speech_policy.emit()` is the single writer: the five
+  allowed moments, an unverified `task_done` suppressed, everything else silent. Every line is
+  recorded as a `speech` event, so what Alex said is auditable, and served to the shell at
+  `/api/speech/pending`.
+- **Two tasks at once, and you can tell them apart.** Each update is prefixed with the task's
+  short name ("Short note solar power: on it."), long runs emit discrete milestones without
+  speaking them, and a second request is reported as queued rather than silently parallel.
 
 ## Bugs found and fixed so far
 
@@ -119,7 +126,8 @@ Each top folder has its own `index.md`, and the root `index.md` states the layou
 |---|---|---|
 | 3.2 real hardware action not executed | toggling Bluetooth/Wi-Fi while you sleep changes your machine | you: ask "turn off bluetooth" |
 | Approve does not wake a parked worker | no worker waits at the gate yet | 3.4 / 5.5 |
-| 3.4 milestones, 3.6 speech wiring, 3.7 queue names, 3.8 Tauri close | next Phase 3 items | Phase 3 |
+| 3.8 window did not actually close | built and compiled, but needs the desktop app running | you: say goodbye in the app |
+| "Gold rate today" is model knowledge, not a live rate | `quick_answer` has no browsing | Phase 5 (Hermes/browser) |
 | Approval-required tools are blocked, not paused | fail-closed until parking exists | 5.5 |
 | UI does not render `evidence` or call real clear | Logs page rewrite | 7.1 / 7.2 |
 | Voice/STT/TTS untouched | needs you at the machine to verify | Phase 4 |
@@ -138,6 +146,10 @@ Each top folder has its own `index.md`, and the root `index.md` states the layou
   `mail.send` → blocked + `awaiting_approval`; finished task → 409; 7/7 lock assertions.
 - Phase 3 — 31/31 utterances; spy fallback proves no model call on rule hits; live `/api/alex/chat`
   answers via Ollama (`tokens_in=51, tokens_out=128`); slot question → task `T-20261115-29EC00`.
+- Phase 3 (speech) — two concurrent tasks: speech moments exactly `{task_started, task_done}`,
+  3 milestones each, every line task-named and distinct; `/api/speech/pending` returned 3 with
+  `next_after_id=97`; live queue check `queued=false` then `queued=true`; SSE for "goodbye alex"
+  carried `alex.action=close_app`; `cargo check` and `tsc` both exit 0.
 - Storage tree — created and listed (11 directories, 2 OKF indexes, 239 GiB free).
 
 ## Not verified (be sceptical here)
@@ -154,8 +166,10 @@ Each top folder has its own `index.md`, and the root `index.md` states the layou
 
 1. `openjarvis alex status` → expect three healthy lines. If not: `openjarvis alex up`.
 2. `cd ~/.openjarvis/src && git log --oneline -5` → confirm the blueprint commit with §A7.
-3. Finish **Phase 3** in order: **3.6** speech wiring, **3.4** milestones, **3.7** queue names,
-   **3.8** Tauri close, then the Phase 3 gate.
+3. Close **3.8** by saying goodbye in the running desktop app (the command and the stream metadata
+   are in place and compiled), and **3.2** by asking "turn off bluetooth" once. Then take the Phase 3
+   gate audit at the end of Phase 3 in `CHECKLIST.md`: four items are blocked on Phase 5 (real Hermes,
+   live web answers) and on the ≥100-utterance guard set, not on wiring.
 4. Ask **"turn off bluetooth"** to close 3.2 on real hardware.
 5. Then **Phase 4** (voice + human delivery), then **Phase 6** (memory) — 6.1→6.14 in order.
 6. Tick `CHECKLIST.md` only when each "Done when" holds; append date + commit. Update this report at

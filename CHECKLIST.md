@@ -35,7 +35,7 @@ Source plan: [`x-txt-open-jarvis-openjarvis-personal-a-declarative-leaf.md`](x-t
 | 0 | Freeze & baseline | ½ d | 4 / 4 | **Done** | 2026-11-14 |
 | 1 | One repo, one app | 2 d | 8 / 8 | **Done** | 2026-11-14 |
 | 2 | Ledger truth | 2 d | 7 / 7 | **Done** | 2026-11-14 |
-| 3 | Face ↔ Trinity wiring | 3 d | 3 / 8 | In progress | `2960a82f` |
+| 3 | Face ↔ Trinity wiring | 3 d | 6 / 8 | In progress | `6e7f3a56` |
 | 4 | Voice: one pipeline that never dies + human delivery | 3 d | 0 / 10 | Not started | — |
 | 5 | Hermes becomes real | 4–5 d | 0 / 8 | Not started | — |
 | 6 | Memory: short-term ⇄ long-term + experience | 5 d | 0 / 14 | Not started | — |
@@ -198,17 +198,23 @@ Target layout:
   - Done when: the answer comes back through the gateway and is logged as a model call.
   - **Result:** live `POST /api/alex/chat` → "William Shakespeare wrote Hamlet." and `/v1/chat/completions` → "Tokyo is the capital of Japan." Logged as `model_calls{gw=ollama, model=qwen3:4b, tokens_in=51, tokens_out=128, outcome=success}`.
   - **Blocker found and fixed:** every hosted gateway returns **401** (no `FREELLMAPI_KEY`/`GROQ_API_KEY`/`OPENROUTER_API_KEY` in the native process), so answers were impossible. The gateway now appends a keyless local Ollama candidate as the last resort, and the stale `local` model name (`qwen3-4b-64k`) was corrected to the tag Ollama actually has (`qwen3:4b`).
-- [ ] **3.4** `complex_task` → `POST /api/tasks` → poll/subscribe events → speak milestones per speech policy
+- [x] **3.4** `complex_task` → `POST /api/tasks` → poll/subscribe events → speak milestones per speech policy — 2026-11-15 · `6e7f3a56`
   - Done when: a long task emits milestones and Alex speaks only at the allowed points.
+  - **Result:** each run now writes discrete `milestone` events (step 1/3 planning, 2/3 executing, 3/3 complete, with the task short name) alongside progress, and speech stays silent on them. Verified on two concurrent runs: event stream `dispatch → speech → progress → milestone → … → done → speech`, exactly 3 milestones each.
 - [x] **3.5** Replace `alex_dialogue.py`'s canned regex bot with `dialogue.py`: real slot-filling (topic, words, channel, contact email), **no hardcoded facts** — 2026-11-14 · `2960a82f`
   - Done when: `grep -n "7,850"` and friends find nothing, and a missing slot triggers a question.
   - **Result:** `matrix/alex_dialogue.py` deleted (hardcoded essay, gold rate, canned replies); `alex/dialogue.py` mounts in `/api/alex/chat` and `/v1/chat/completions`. `grep "7,850"` and `grep "Master Khan"` → nothing. Slot filling verified: "write a 60-word note on diwali and mail zara" captured `{deliverable: note, topic: diwali, words: 60, recipient: Zara}` then asked **"What email address should I use for Zara?"**; answering dispatched `T-20261115-29EC00`. Known contact Max resolves from memory (`max123@gmail.com`) without asking.
-- [ ] **3.6** Proactive speech policy: speak on `task_started`, `approval_needed`, `blocked`, `task_failed`, verified `task_done`; never on intermediate tool calls
+- [x] **3.6** Proactive speech policy: speak on `task_started`, `approval_needed`, `blocked`, `task_failed`, verified `task_done`; never on intermediate tool calls — 2026-11-15 · `6e7f3a56`
   - Done when: a multi-step run produces speech only at those five events.
-- [ ] **3.7** Multi-task queue: concurrent Hermes runs, Face prefixes updates with the task short-name
+  - **Result:** `speech_policy.emit()` is the only writer: it refuses any moment outside the five, skips an unverified `task_done`, and records the approved line as a `speech` event. In the two-task run, speech moments were exactly `{task_started, task_done}` — no line for any progress tick, milestone or model call. `GET /api/speech/pending?after_id=` serves them in order (3 returned, `next_after_id=97`).
+- [x] **3.7** Multi-task queue: concurrent Hermes runs, Face prefixes updates with the task short-name — 2026-11-15 · `6e7f3a56`
   - Done when: two tasks run at once and each update names its task.
-- [ ] **3.8** Close-on-goodbye via a Tauri command the server calls (no `osascript`/`pkill` hacks)
+  - **Result:** `short_name()` derives the handle ("short note solar power"), and every line is prefixed with it: `"Short note solar power: on it."` / `"…: done — …"`. Two concurrent tasks produced distinct, correctly-named lines. Live queue check: first dispatch `queued=false` ("On it: …"), second `queued=true` ("Added to the queue: …").
+  - **Bug fixed while testing:** the queue check read the worker registry before the new coroutine had started, so two requests in the same tick were both told "On it". `submit_task()` now claims the slot *before* scheduling; `asyncio` still runs them concurrently, but the second is reported as queued.
+- [ ] **3.8** Close-on-goodbye via a Tauri command the server calls (no `osascript`/`pkill` hacks) — **built, GUI shutdown not yet seen** · `6e7f3a56`
   - Done when: "No" on "anything else?" shuts the app down cleanly through the command.
+  - **Result:** `close_app` command added and registered (`app.exit(0)`, so `RunEvent::ExitRequested → stop_all` kills the backend children instead of orphaning them); the dialogue turn returns `action: "close_app"`, it is carried on the **stream** chunk the UI actually reads (`alex.action`), and `InputArea` invokes the command on it. Verified: SSE stream for "goodbye alex" returns `delta: "I'll be off then…"` with `alex: {action: close_app, kind: shutdown}`; `cargo check` exit 0; TypeScript typecheck exit 0. **Not verified:** the window actually closing, which needs the desktop app running.
+  - **Latent bug found:** the streaming path dropped all dialogue metadata, so the UI could never have acted on an action — the chunk now carries `alex`.
 
 **Phase gate**
 - [ ] "Turn off Bluetooth" → instant, verified, recorded, spoken
@@ -217,6 +223,17 @@ Target layout:
 - [ ] "Make a Diwali card PDF" queues as a second task while the first runs
 - [ ] Alex speaks only at accept/approval/blocked/done
 - [ ] False positives ("what time do you close?" etc.) do **not** trigger basic actions — ≥100 labelled utterances
+
+**Phase 3 gate audit (2026-11-15)** — the phase cannot be declared Done yet, and the blockers are not this phase's:
+
+| Gate item | State | Why |
+|---|---|---|
+| Alex speaks only at accept/approval/blocked/done | ✅ | speech moments were exactly `{task_started, task_done}` across two concurrent runs |
+| Second task queues while the first runs | ✅ (messaging) | two runs execute concurrently and the second is told it was queued; the PDF itself needs 5.8 |
+| "Turn off Bluetooth" → verified + recorded | ⛔ | dry-run only — needs you at the machine |
+| "Gold rate today" → real web answer | ⛔ | `quick_answer` has no browsing; a real rate needs Hermes/browser (5.x) |
+| Essay → Hermes → approval → send | ⛔ | Hermes is still Matrix's built-in path (5.1) |
+| ≥100 labelled utterances, 0 false positives | ⛔ | 31 exist; the set must grow before this is claimed |
 
 ---
 
