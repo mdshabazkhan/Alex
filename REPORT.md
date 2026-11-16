@@ -317,3 +317,28 @@ defects, each verified after the fix:
 - A three-toolset task therefore cannot complete on this machine today. Closing 5.1 needs one
   provider key (Groq's free `llama-3.3-70b-versatile` is already first in the `agent` chain) — after
   that, the same POST to `/v1/runs` is the whole proof.
+
+## Runtime review and the ledger cleanup (2026-11-16)
+
+`~/.openjarvis/src` @ `0e805f91`.
+
+- **Runtime simplified** (`hermes/runtime.py`): one `runs` dict instead of `runs` + `run_procs` (each
+  entry carries its `pid`), one `TOOLSET_FOR_TOOL` table instead of the hand-rolled config walk, the
+  150-line static dashboard replaced by a compact page listing live runs, and a failed ledger write
+  now prints instead of being swallowed. Behaviour re-verified: `POST /v1/runs` → `running` with a
+  pid; `/stop` → `stopped`, `hermes exited with code -15`, `finished_at` set; `/` renders 200.
+- **One data root.** `paths.data_root()` is now the only rule: `$ALEX_DATA_ROOT`, then
+  `config.toml [alex].data_root`, then `~/.openjarvis`. `store.py`, `dialogue.py` and `reports.py`
+  used to carry their own `env or os.getcwd()` copies (and `reports` was a bare relative path), so
+  the launchd-started Face process and any ad-hoc script could write a different ledger than Matrix.
+  Verified from `/tmp` with the env unset: ledger, memory, reports and workspace all resolve into
+  `Alex/storage/`.
+- **Which ledger was stray — not the one it looked like.** `Alex/storage/data/ledger.db` holds the
+  real history (28 tasks, 167 events, 184 model calls) and stays. The accidental copy was
+  `~/.openjarvis/src/storage/` (96 KB, one `model_calls` row from a 03:09 inline probe, no tasks);
+  with no open handles and every path now resolving to Alex, it was removed and did not reappear
+  after a full `jarvis alex down/up`.
+- **Guards:** classify 135/135, human-delivery 38/38, voice 11/11 (the first voice run gave 8/11
+  under load and the rerun 11/11 — it asserts speech-queue timings, so treat a lone miss as a flake).
+- Phase 5 status unchanged: **5.1 still unticked**, same blocker (no provider key; local 4B model
+  cannot finish a tool-using run).
