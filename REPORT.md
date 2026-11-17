@@ -1,5 +1,11 @@
 # Alex merge — progress report
 
+## Voice overlap repair — 2026-11-18
+
+- Alex now has one native speech path, using **Samantha**. The browser audio fallback cannot start while Alex voice detection is pending or unavailable, so it cannot overlap native speech.
+- Repeated speaker presses for the same message are ignored. Stop waits for any in-flight native stop before another message starts, and a queued line is cancelled even if it is waiting for the shared system voice lock.
+- Verification: frontend voice suite **18 / 18**, full frontend suite **128 / 128**, and Alex/server suite **250 / 250** passed. A live concurrent playback probe accepted one of two simultaneous requests, observed one `say` process using Samantha, and left no active or queued speech after Stop. Physical-speaker listening was confirmed by the user afterward.
+
 _Last updated: 2026-11-14 (unsupervised session). Read this top box first._
 
 **Resume:** [jump to Resume](#resume-here). **Everything below is committed.**
