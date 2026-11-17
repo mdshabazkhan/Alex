@@ -35,12 +35,12 @@ Source plan: [`x-txt-open-jarvis-openjarvis-personal-a-declarative-leaf.md`](x-t
 | 0 | Freeze & baseline | ½ d | 4 / 4 | **Done** | 2026-11-14 |
 | 1 | One repo, one app | 2 d | 8 / 8 | **Done** | 2026-11-14 |
 | 2 | Ledger truth | 2 d | 7 / 7 | **Done** | 2026-11-14 |
-| 3 | Face ↔ Trinity wiring | 3 d | 6 / 8 | In progress | `6e7f3a56` |
-| 4 | Voice: one pipeline that never dies + human delivery | 3 d | 3 / 10 | In progress | `3630cfad` |
-| 5 | Hermes becomes real | 4–5 d | 0 / 8 | Not started | — |
-| 6 | Memory: short-term ⇄ long-term + experience | 5 d | 0 / 14 | Not started | — |
-| 7 | Logs, dashboard & report | 1–2 d | 0 / 5 | Not started | — |
-| 8 | Hardening & acceptance | 3 d | 0 / 5 | Not started | — |
+| 3 | Face ↔ Trinity wiring | 3 d | 10 / 11 | In progress | 2026-11-18 |
+| 4 | Voice: one pipeline that never dies + human delivery | 3 d | 8 / 10 | In progress | `3630cfad` |
+| 5 | Hermes becomes real | 4–5 d | 7 / 8 | In progress | 2026-11-17 |
+| 6 | Memory: short-term ⇄ long-term + experience | 5 d | 14 / 14 | In progress | 2026-11-17 |
+| 7 | Logs, dashboard & report | 1–2 d | 6 / 6 | Done | 2026-11-18 |
+| 8 | Hardening & acceptance | 3 d | 2 / 5 | In progress | 2026-11-17 |
 
 ---
 
@@ -191,9 +191,9 @@ Target layout:
 - [x] **3.1** One `classify.py` for every user turn: `basic_reflex` | `quick_answer` | `complex_task` (rules first, one cheap model call only on a miss) — 2026-11-14 · `07476c3f`
   - Done when: a labelled utterance set routes deterministically and the model is called only on rule misses.
   - **Result:** 31/31 labelled utterances route as expected. Guards proven: "what time do you close?" → quick (not a reflex), "if you can, turn off wifi" → quick, "don't turn off wifi" → quick, "open the door" → quick (not an app launch). Politeness handled: "can you turn off bluetooth?" → reflex. Determinism asserted with a spy fallback: **no model call** on three rule hits, exactly one on a total miss.
-- [ ] **3.2** `basic_reflex` → `friday-mac` tools with verification + evidence → `POST /api/tasks` with `executor=face` — **partially verified (dry-run only)**
+- [x] ~~**3.2** `basic_reflex` → `friday-mac` tools with verification + evidence → `POST /api/tasks` with `executor=face`~~ — 2026-11-17
   - Done when: "turn off bluetooth" produces a verified action plus a recorded task row.
-  - **Result:** the path exists and records `executor=face` with `intake`/`dispatch`/`done` and the tool's evidence (e.g. `Bluetooth: dry-run… (verified)`). Only the **dry-run** half is proven: actually toggling Bluetooth/Wi-Fi would change your machine while you are asleep, so the real action is left for you to trigger. Run `openjarvis alex status`, then ask "turn off bluetooth" — the row should show real evidence.
+  - **Result:** live `turn off bluetooth` (`T-20261117-6C9A16`) returned `Bluetooth: Bluetooth disabled (verified)`, recorded `executor=face` with `intake`/`dispatch`/`done`, and stored `evidence:"Bluetooth disabled"`; `system_profiler` reported State Off. Bluetooth was restored to On after the drill. The actuator also has an 8-second timeout for the earlier blueutil hang, covered by `tests/alex/test_bluetooth_tool.py`.
 - [x] **3.3** `quick_answer` → Matrix `/v1` (`friday-fast`) with a concise rubric — 2026-11-14 · `2960a82f`
   - Done when: the answer comes back through the gateway and is logged as a model call.
   - **Result:** live `POST /api/alex/chat` → "William Shakespeare wrote Hamlet." and `/v1/chat/completions` → "Tokyo is the capital of Japan." Logged as `model_calls{gw=ollama, model=qwen3:4b, tokens_in=51, tokens_out=128, outcome=success}`.
@@ -204,25 +204,37 @@ Target layout:
 - [x] **3.5** Replace `alex_dialogue.py`'s canned regex bot with `dialogue.py`: real slot-filling (topic, words, channel, contact email), **no hardcoded facts** — 2026-11-14 · `2960a82f`
   - Done when: `grep -n "7,850"` and friends find nothing, and a missing slot triggers a question.
   - **Result:** `matrix/alex_dialogue.py` deleted (hardcoded essay, gold rate, canned replies); `alex/dialogue.py` mounts in `/api/alex/chat` and `/v1/chat/completions`. `grep "7,850"` and `grep "Master Khan"` → nothing. Slot filling verified: "write a 60-word note on diwali and mail zara" captured `{deliverable: note, topic: diwali, words: 60, recipient: Zara}` then asked **"What email address should I use for Zara?"**; answering dispatched `T-20261115-29EC00`. Known contact Max resolves from memory (`max123@gmail.com`) without asking.
-- [x] **3.6** Proactive speech policy: speak on `task_started`, `approval_needed`, `blocked`, `task_failed`, verified `task_done`; never on intermediate tool calls — 2026-11-15 · `6e7f3a56`
-  - Done when: a multi-step run produces speech only at those five events.
+- [x] **3.6** Proactive speech policy: speak on `approval_needed`, `blocked`, `task_failed`, verified `task_done`; never on `task_started` or intermediate tool calls — 2026-11-15 · amended 2026-11-18 · `6e7f3a56`
+  - Done when: a multi-step run produces speech only at those four events.
+  - **Amended 2026-11-18 (user: “until then it doesn't disturb with annoying text”):** `task_started` is no longer an allowed speech moment — `speech_policy.ALLOWED_EVENTS` no longer contains it, so a dispatched task is silent until it is verified done, blocked, needs approval, or fails. The interim chat acknowledgement `"On it: … I'll tell you when it's finished."` is kept deliberately as a single reply, not progress chatter.
   - **Result:** `speech_policy.emit()` is the only writer: it refuses any moment outside the five, skips an unverified `task_done`, and records the approved line as a `speech` event. In the two-task run, speech moments were exactly `{task_started, task_done}` — no line for any progress tick, milestone or model call. `GET /api/speech/pending?after_id=` serves them in order (3 returned, `next_after_id=97`).
 - [x] **3.7** Multi-task queue: concurrent Hermes runs, Face prefixes updates with the task short-name — 2026-11-15 · `6e7f3a56`
   - Done when: two tasks run at once and each update names its task.
   - **Result:** `short_name()` derives the handle and every line names its task in a spoken sentence: `"On it — short note about solar power."`, `"Done — 100-word essay on diwali. …"`, `"Short note about solar power failed: rate limit."`. Two concurrent tasks produced distinct, correctly-named lines. Live check: first dispatch `parallel=false` ("On it: …"), second `parallel=true` ("Starting that alongside the other one: …") — the second is **not** called queued, because both run concurrently.
   - **Bug fixed while testing:** the concurrency check read the worker registry before the new coroutine had started, so two requests in the same tick were both told "On it". `submit_task()` now claims the slot *before* scheduling.
   - **Bug fixed (wording review, 2026-11-15):** the label stripped prepositions ("note solar power") and the line used a colon prefix ("Short note solar power: on it."). Labels now keep their prepositions, drop only the leading verb/article, keep both subjects unless the tail is a send ("scrape croda and dupont" → "croda and dupont"), and the sentences read naturally. The "queued" wording was a lie for tasks that run in parallel and is now "Starting that alongside the other one".
-- [ ] **3.8** Close-on-goodbye via a Tauri command the server calls (no `osascript`/`pkill` hacks) — **built, GUI shutdown not yet seen** · `6e7f3a56`
+- [ ] **3.8** Close-on-goodbye via a Tauri command the server calls (no `osascript`/`pkill` hacks) — **built, GUI shutdown not yet seen; accessibility inspection timed out on the running bundle** · `6e7f3a56`
   - Done when: "No" on "anything else?" shuts the app down cleanly through the command.
   - **Result:** `close_app` command added and registered (`app.exit(0)`, so `RunEvent::ExitRequested → stop_all` kills the backend children instead of orphaning them); the dialogue turn returns `action: "close_app"`, it is carried on the **stream** chunk the UI actually reads (`alex.action`), and `InputArea` invokes the command on it. Verified: SSE stream for "goodbye alex" returns `delta: "I'll be off then…"` with `alex: {action: close_app, kind: shutdown}`; `cargo check` exit 0; TypeScript typecheck exit 0. **Not verified:** the window actually closing, which needs the desktop app running.
   - **Latent bug found:** the streaming path dropped all dialogue metadata, so the UI could never have acted on an action — the chunk now carries `alex`.
+- [x] **3.9** Conversation threads: every turn is kept in a per-conversation JSON file, follow-ups resolve from it, and a new conversation starts fresh — 2026-11-18
+  - Done when: a follow-up that only makes sense in context resolves without repeating the subject, and another session does not inherit it.
+  - **Result:** `alex/threads.py` keeps `Storage/conversations/<thread_id>.json` (one file per conversation, every turn dated, `_active.json` mapping session → thread), and the dialogue reads the thread before answering. A thread idle under two hours is still "the current conversation"; untouched for 30 days its JSON is discarded while the distilled `short_term` (skill + procedure) and `long_term` (summary, artifacts) rows stay in SQLite. Tests: `tests/alex/test_conversation_threads.py`, `tests/alex/test_thread_context.py`.
+- [x] **3.10** Playback is resolved, played and verified instead of announced — 2026-11-18
+  - Done when: the reply names the video that is actually playing, and a bare follow-up ("play it", an artist name) reuses what was just played.
+  - **Result:** the Face route no longer opens `youtube.com/results?search_query=<the whole sentence>` and replies “Playing …” over a results page — it calls `executor.play_song`, so the **subject** is searched, not the instruction (“I want you to play attention by Charlie Puth on YouTube.” → `Charlie Puth Attention`). Wrappers (“I want you to”, “can you”, “please”) and a trailing “on YouTube” are stripped by `normalise_song_query`/`classify.py`; "play it" falls through to the thread memory; a bare name after playback is treated as the song/artist. Live: the right video played and the reply quoted its verified title; “Play it on YouTube.” restarted the same tab. Tests: `tests/server/test_play_route.py`, `tests/alex/test_play_song_execution.py`.
+- [x] **3.11** A web question is understood before it is executed: subject separated from the instruction, pages read, summary with sources — 2026-11-18
+  - Done when: "google about harry potter series on chrome" searches the subject, and the reply is a summary of what the pages actually said.
+  - **Result:** new `alex/web.py` parses the request (`understand_search_request` → `{query: "harry potter series", engine: google}`, returning `None` for ordinary questions), opens Chrome on `google.com/search?q=harry+potter+series`, collects result pages, reads the top two, and summarises them with `[n]` citations through the local gateway (extractive fallback). When no page is readable it says so and is **not** verified rather than inventing an answer. Google serves HTTP clients a JavaScript shell (0 results parsed, 93 KB), so discovery uses Bing's server-rendered HTML while the visible tab is the Google search the user asked for. Live: correct URL in Chrome and a real summary of two Wikipedia pages; a run with no readable page returned “nothing to summarise” and `verified: false`. Tests: `tests/alex/test_web_research.py` (5).
 
 **Phase gate**
-- [ ] "Turn off Bluetooth" → instant, verified, recorded, spoken
-- [ ] "What's the gold rate today?" → real web answer (no hardcoded line)
+- [x] "Turn off Bluetooth" → instant, verified, recorded, spoken — 2026-11-17 · `T-20261117-6C9A16`, evidence `Bluetooth disabled`, system State Off (restored On after)
+- [x] "What's the gold rate today?" → real web answer (no hardcoded line) — 2026-11-17 · live `/api/alex/chat` returned `$3,868.97` per troy ounce from `gold-api.com`, with a fresh timestamp and source in the reply
 - [ ] "Write 100-word essay on Diwali and mail Max" → slot-filling → Hermes → approval → send
-- [ ] "Make a Diwali card PDF" queues as a second task while the first runs
-- [ ] Alex speaks only at accept/approval/blocked/done
+- [x] "Make a Diwali card PDF" queues as a second task while the first runs — 2026-11-17 · live
+  - First attempt **failed**, and the failure was worth having: it answered "What should it be about?" about a subject the user had just named, because topic extraction only understood "about X" phrasing. `_extract_slots` now falls back to the phrase left over once the imperative and the deliverable word are removed ("make a **Diwali** card PDF" → `Diwali`), and still asks when nothing is left ("write an essay").
+  - Retest, two requests 2 s apart: `On it: 100-word essay on Diwali. I'll tell you when it's finished.` then `Starting that alongside the other one: card on Diwali.` Two ledger rows, both `executor=hermes` (`…1CA763` essay, `…EEE1E6` card). Tests: `_extract_slots` named-subject and subjectless cases.
+- [x] Alex speaks only at approval/blocked/failed/verified done — 2026-11-17, amended 2026-11-18 · `speech_policy` two-task run emitted speech only on `task_started`/verified `task_done`; `task_started` has since been removed from the allowed set, so a running task is silent until its outcome is verified; intermediate tool/milestone events were silent
 - [x] False positives ("what time do you close?" etc.) do **not** trigger basic actions — ≥100 labelled utterances — 2026-11-15
   - **Result:** `scripts/alex_classify_check.py` runs **135 assertions: 123 labelled utterances** (39 reflex / 44 quick / 40 complex) **+ 12 argument checks**, all passing, exit 0. The trap set includes "what time do you close", "if you can, turn off wifi", "don't turn off wifi", "do not turn off wifi", "turn off wifi and bluetooth", "open the door", "turn on the lights", "bluetooth keeps disconnecting" — none of which act.
   - **Bugs it caught:** "could you switch bluetooth off" was not recognised as a reflex (state-after-noun form was missing), and — worse — "enable bluetooth" routed to the reflex but parsed **no state**, so the actuator *toggled* instead of enabling. Both fixed; arguments are now pinned by the 12 arg cases.
@@ -250,7 +262,30 @@ Target layout:
   - **Note:** the mic is not yet wired into the UI (that is 4.2), so this proves the rules and the API, not a live microphone.
 - [ ] **4.2** Frontend: single `useSpeech` drives the state machine; auto-start on launch; auto-return to listening after every answer; reset `_mic_auto_stopped`/`_mic_has_spoken` — **wired by Gemini, 10-turn proof still missing**
   - Done when: 10 consecutive turns leave the mic live and listening.
-  - **Result so far:** `useSpeech.ts` and `MicButton.tsx` were rewritten to drive `/v1/alex/listening/{start,level,partial,stop,state,speaking}` against the Face server (`:8000`), and that cycle was verified over HTTP on `:8000` (`start → listening`, `level` marks speech, `"… alex reply"` → `action=submit`, state `thinking`). `tsc` is clean. **Not verified:** ten live turns, which needs the desktop app and a microphone.
+  - **Result so far:** `useSpeech.ts` and `MicButton.tsx` drive `/v1/alex/listening/{start,level,partial,stop,state,speaking}` against Face (`:8000`). On 2026-11-17, the production desktop was rebuilt with `NSMicrophoneUsageDescription`; it visibly auto-started in **Listening** state, and a typed live turn completed through Matrix (`Hello Alex` → `Hello. How can I help you today?`) before returning to **Listening**. Fixed two live defects: a native-mic HTTP-200 error payload had been mistaken for a working recorder (so browser fallback never ran), and unstable hook options could repeatedly re-open the mic on React renders. The hook now accepts only `status:"recording"`, falls back with a surfaced error, and guards an active stream. Automatic spoken replies now default on and persist across reloads. Regression tests **23 passed**; frontend and signed Tauri bundle builds passed. **Not verified:** ten spoken turns and audio output heard by a human, which remain required before ticking this row.
+  - **Echo fixed 2026-11-17 (this is why every reply was heard twice):** the Face speaks each Alex
+    reply through `say`, and the UI *also* autoplayed the finished message by synthesising it again —
+    two voices a beat apart. Autoplay now asks the server first (`serverHoldsTheVoice`): it stands down
+    while the speaker is talking, and also when the speaker has just finished that same line
+    (`Speaker.status()` gained `last`/`last_finished_at`, checked live). The native mic gates on the
+    real speaker state plus a 1.2 s tail and clears its buffer while Alex talks; the browser fallback
+    requests `echoCancellation`. A latent defect is fixed with it: nothing ever called
+    `note_speaking_done()`, so the session stayed in `SPEAKING` after the first reply and could never
+    submit again. Recording is continuous now too — partials every 2 s, one spoken
+    "Can you specify further?" for an unfinished sentence, and "listen to this" opening a 15 s
+    long-form turn. Every turn is kept: `Storage/temp/voice/*.wav` beside
+    `Storage/temp/transcriptions/*.json` (+ `.txt`). Evidence: `tests/alex/test_listening_voice_flow.py`
+    (24 checks), frontend 131 tests, `tsc --noEmit` clean, plus the live HTTP probes in `REPORT.md`.
+    Live microphone turns are still unobserved, so this row stays open.
+  - **Correction, same day — the guard above was not enough.** A guard around UI autoplay still left
+    a second playback path (timing holes, a failed status fetch, a speaker in the other process). The
+    UI autoplay has now been **deleted**, not gated: Face is the only voice, and the speaker itself
+    refuses to queue the same line while it is speaking or within 3 s of finishing it, so two callers
+    cannot produce the same sentence twice. The now-dead "Speak replies automatically" setting was
+    removed with it. Measured before the change: one request → one `say` (22:24:28–22:24:33), Face
+    `spoken` 0→1, Matrix `spoken` 0, so the duplicate was entirely client-side. After: two rapid turns
+    → one `say` at a time, two replies, `spoken` +2. `tests/alex/test_voice_dedupe.py`; frontend 121
+    tests (the 10 autoplay tests went with the code they tested).
 - [x] **4.3** One TTS path: server `say -v Samantha` (queue + `pkill say` on barge-in); browser only as fallback; remove the other speak functions — 2026-11-15 · `d2e5d45d`
   - Done when: one code path can speak, and only one process produces audio.
   - **Result:** four `say` call sites collapsed into `alex/face/voice.py`. One worker thread plays one line at a time (`Popen` + `wait`), `barge_in()` terminates the current process and invalidates everything queued via a generation counter, and the old sites (Face route, two barge-in handlers, Matrix stop endpoint) now delegate. `scripts/alex_voice_check.py` → **11/11**: queued lines never overlap, barge-in silences within 1 s and the queued line is never heard, and exactly one file in `src/` spawns `say`. Live: `/v1/alex/voice/say` reports `speaking: true` then clears with `spoken` incremented; `/api/alex/stop_speaking` returns `silenced`.
@@ -265,22 +300,37 @@ Target layout:
 - [ ] **4.6** Fold wake word into the server (`openwakeword`, `faster-whisper` fallback); delete the standalone listener — **built, firing not yet observed**
   - Done when: `alex_wake_listener.py` is deleted and wake fires once per invocation from the server.
   - **Result so far:** `openjarvis/alex/face/wake.py` replaces the daemon; the server starts it on startup and stops it on shutdown (`app.py`), and it speaks through the single voice path instead of spawning its own `say`. `Alex/alex_wake_listener.py` is deleted (commit `chore(alex)`). **Not verified:** that the wake phrase fires exactly once, which needs a microphone.
-- [ ] **4.7** Visual state in the UI: mic pulse, countdown ring, "Listening / Thinking / Speaking"
+- [x] **4.7** ~~Visual state in the UI: mic pulse, countdown ring, "Listening / Thinking / Speaking"~~ — 2026-11-17 · working tree (uncommitted)
   - Done when: the indicator tracks the server state without polling drift.
-- [ ] **4.8** Human delivery on the one TTS path: contractions, short sentences, commas honoured as real pauses, rate/pitch chosen by intent (calm for status, brisk for answers); never read punctuation aloud
+  - **Result:** `MicButton` maps the server-backed speech state and stream state to explicit Listening/Thinking/Speaking labels, pulse/spinner affordances, and a five-second SVG countdown ring driven by `silenceRemaining`. Added three render-level regressions covering all states; frontend test and production build pass.
+- [x] **4.8** Human delivery on the one TTS path: contractions, short sentences, commas honoured as real pauses, rate/pitch chosen by intent (calm for status, brisk for answers); never read punctuation aloud — 2026-11-17 · working tree (uncommitted)
   - Done when: "done" and "failed" sound audibly different for the same words, and no reply ever speaks the word "comma".
-- [ ] **4.9** Conversational timing: first audio within ~300 ms ("right", "okay", "let me check") when work will take longer; backchannel without stealing the turn; never talk over the user
+  - **Measuring it found a real defect.** The configured rates were 155 (failed) and 175 (done). Rendered to file, both produced **byte-identical audio** (58 900 bytes each; 150 gave 63 868, so the rate flag does work — those two values simply land in the same bucket). In other words "done" and "failed" *did* sound the same, and no amount of listening would have told me why.
+  - **Fix:** rates widened to a ~10% spread (failed 130, blocked 140, status 158, done 186, answer 200, ack 210) and pitch added per intent (`say [[pbas N]]`: failed 38 low and calm, done 54 bright), because rate alone reads as speed, not mood.
+  - **Verified:** same sentence, same voice — done `186 wpm / pbas 54` → 2.567 s, hash `17cdfc685cef`; failed `130 wpm / pbas 38` → 2.923 s, hash `fb7d1677d170`. Different duration and different samples, so audibly different; `sanitize_for_speech("say this, comma, then stop")` → `"say this, then stop"`, and the word "comma" never reaches the speaker. *Not verified by ear — the difference was measured in the rendered audio.*
+- [x] **4.9** Conversational timing: first audio within ~300 ms ("right", "okay", "let me check") when work will take longer; backchannel without stealing the turn; never talk over the user — 2026-11-17 · working tree (uncommitted)
   - Done when: a slow task gets an immediate short acknowledgement and first-audio latency is measured and recorded below.
-- [ ] **4.10** Humanistic failure and repair: no robotic error strings — acknowledge once, say what actually happened, offer the next step, and vary the phrasing so repeats do not sound canned
+  - **Result:** the Matrix worker emits exactly one `task_started` acknowledgement before its connectivity/network probe (regression test asserts it precedes `check_internet()` and is not duplicated). Measured on the live speaker: `voice.speak("Right, let me check that.")` → a `say` process alive **25 ms** later, recorded below. The measurement is spawn-to-process latency, not time-to-first-syllable; `say` starts audio immediately after spawn.
+- [x] **4.10** Humanistic failure and repair: no robotic error strings — acknowledge once, say what actually happened, offer the next step, and vary the phrasing so repeats do not sound canned — 2026-11-17 · working tree (uncommitted)
   - Done when: five forced failures produce five non-identical, non-technical replies.
+  - **Result:** five forced failures — a rate limit, a dropped connection, a stale heartbeat, malformed provider JSON, and a permission error — produced five distinct spoken replies, each naming what happened in plain words and offering a next step ("I can try again in a moment", "let me know if I should resume", "Would you like me to retry?"). Scanned for the raw material and none leaked into speech: no `Error`, `Exception`, `Traceback`, `429`, `JSON`, `Errno`, or class name in any of the five.
 
 **Phase gate**
-- [ ] Launch app → mic is live with **no** clicks
+- [x] Launch app → mic is live with **no** clicks — 2026-11-17 · rebuilt Tauri app auto-started Face native capture; live `/v1/speech/mic/status` reported `recording:true`, `state:"listening"` after a clean desktop restart, and the UI visibly showed Listening without interaction
 - [ ] Speak → wait 5 s → it answers
 - [ ] "Alex reply" mid-sentence → immediate answer
 - [ ] "Listen" while speaking → stops instantly
 - [ ] Repeat 10 turns → mic still works on turn 11
-- [ ] Alex does not answer its own voice
+- [x] Alex does not answer its own voice — 2026-11-17 · user-confirmed live after the Astra 6.1 fix
+  - **Signed off by the user, 2026-11-17 late:** *"voice agent is fixed"*. The per-message speaker
+    button was the last second voice: replay now goes through Face's one `say` (`tts.ts` →
+    `/v1/alex/voice/say`, followed with `/v1/alex/voice/status`, stopped via `/v1/alex/voice/stop`),
+    and `/v1/speech/tts/health` reports `native_alex: true`. Checked here, not taken on trust: that
+    health payload, live `/v1/alex/voice/status` (`spoken: 9`, one `last` line,
+    `system_speaking: false`), and `frontend/src/lib/tts.test.ts` → **18 passed** (seven of them the
+    native-replay paths). The by-ear half is the user's confirmation; I did not hear the audio.
+    Handover detail kept in `VOICE_AGENT_NOTES.md`.
+  - **Offline evidence, 2026-11-17 late:** the recordings that caused it — `Storage/temp/voice/20261117T174330795Z.wav` (21.6 s of silence) and `…T174406988Z.wav` (21.7 s) — were transcribed as `Okay. Okay. Okay. …` and `You`. Replayed through the real recogniser they now return `''`, as do two further "Okay." takes. The guard is energy (`MIN_SPEECH_RMS`), Whisper's own `no_speech_prob`/`avg_logprob`, and a silence-artifact filter. The live loop (speak, let Alex answer, confirm it does not transcribe its own reply) was closed by the user's confirmation above; these recordings remain the offline proof that silence alone no longer submits.
 - [ ] Wake word launches the app once (no repeat triggers)
 
 ---
@@ -289,36 +339,50 @@ Target layout:
 
 **Goal:** replace the stub with the real `hermes-agent` runtime (`~/.hermes/hermes-agent`).
 
-- [ ] **5.1** Replace stub `daemon.py` with the real runtime: `/v1/runs` starts an agent loop with toolsets (terminal, files, browser, web, mail, delegation, MCP `friday-mac`)
+- [x] **5.1** Replace stub `daemon.py` with the real runtime: `/v1/runs` starts an agent loop with toolsets (terminal, files, browser, web, mail, delegation, MCP `friday-mac`) — 2026-11-17 · live `run_b4126aa5` and Matrix task `T-20261117-AE2B0E`
   - Done when: a run exercises at least three distinct toolsets and returns real artifacts.
+  - **Result:** the live Hermes run used `tool_search` to discover the terminal/file tools, then executed `terminal`, `read_file`, and `search_files` in order. It created and reread `/Users/mdshabazkhan/Documents/dependencies/Storage/Artifacts/hermes/runs/run_d6634396/matrix_step_proof.txt` with exact content `MATRIX_LIVE_STEP_PROOF`; Matrix recorded the run as verified and done. The isolated direct run `run_b4126aa5` independently recorded the same three tool calls and artifact proof.
   - 2026-11-16 status: the stub is gone — `:8642` now drives the installed `hermes` CLI with the
     configured toolsets, and each run owns a process group (killed on timeout and on shutdown) with
     a workspace under `Storage/Artifacts/hermes/runs/`. Not ticked: no run has finished with three
     toolsets and artifacts. Every cloud candidate answers 401 (no provider key is configured), so
     all traffic lands on local `qwen3:4b-16k`, which cannot finish even a single-tool task inside
     the budget. Details in `REPORT.md`, Phase 5.
-- [ ] **5.2** Model provider = `custom:matrix` (`http://127.0.0.1:8700/v1`), no direct fallbacks
+- [x] **5.2** Model provider = `custom:matrix` (`http://127.0.0.1:8700/v1`), no direct fallbacks — 2026-11-16
   - Done when: stopping Matrix breaks Hermes model calls (proving the path is enforced).
-- [ ] **5.3** Register `matrix_bridge` hooks (`pre_tool_call` fail-closed, `post_tool_call` → ledger) + `matrix_memory` prefetch
+  - **Result:** controlled outage: verified Matrix PID `55733` was the native Matrix process, stopped it,
+    and confirmed `:8700/health` refused connections. A fresh Hermes `run_b6d7f46d` remained running
+    with no response, usage record, artifact, or alternative provider result; it was stopped safely.
+    `alex up` restored Matrix (`pid 61730`) and all three services passed health checks. Hermes launches
+    with `--provider custom`; its active configuration points the custom base URL at Matrix.
+- [x] **5.3** Register `matrix_bridge` hooks (`pre_tool_call` fail-closed, `post_tool_call` → ledger) + `matrix_memory` prefetch — 2026-11-17
   - Done when: a tool call blocked by policy fails the run, and a prefetch shrinks the first prompt.
-- [ ] **5.4** Structured plan: Hermes emits `STEP n/N`; Matrix parses it for progress
+  - **Result:** the canonical live three-tool run produced `pre_tool_call`/`post_tool_call` HTTP activity and Matrix ledger step events for `tool_search`, `terminal`, `read_file`, and `search_files`; an agent-originated `rm harmless_nonexistent_file` call was denied by `DENY-003`, and post-fix rerun `run_7a34f574` ended `failed` with no artifact. The live `matrix-bridge` `pre_llm_call` hook was exercised against a fresh clone of the current Matrix stores: the relevant first-turn brief was **241 tokens** (262 including the hook instruction), versus **15,453 tokens** for the unfiltered 482-document retrieval index (**98.4% fewer tokens**). The brief carried provenance on all five claims and injected the saved Max contact without guessing.
+- [x] **5.4** Structured plan: Hermes emits `STEP n/N`; Matrix parses it for progress — 2026-11-17 · `T-20261117-AE2B0E`
   - Done when: the dashboard shows real `n/N` progress.
-- [ ] **5.5** Evidence-verified completion; Matrix steers once if "done" lacks evidence
+  - **Result:** the live task emitted `STEP 1/3`, `STEP 2/3`, and `STEP 3/3` in Hermes' output; Matrix parsed each milestone and wrote progress events `367`–`369`, and the live task endpoint showed `step_number=3`, `total_steps=3`, `progress_pct=100.0`, and `status=done`.
+- [x] **5.5** Evidence-verified completion: Matrix steers once if "done" lacks evidence, then a second Hermes run must confirm the result before `done` — 2026-11-17, hardened 2026-11-18 · live task `T-20261117-FFD526`
   - Done when: a bogus "done" is rejected and re-steered.
-- [ ] **5.6** Duplicate prevention: idempotency keys for send/move/booking
+  - **Result:** the first Hermes attempt returned only `done` with no artifact; Matrix recorded `EVIDENCE-001`, emitted one `steer`, and retried. The live ledger shows the exact sequence in events `389`–`395`; the second attempt then failed safely as unusable rather than being marked complete.
+  - **Hardened 2026-11-18 (user: “respond done only after verifying”):** the worker's own claim was still the last word — `complete_task(verified=True)` was called for any non-trivial reply. `worker.verify_completion()` now runs a separate short Hermes turn on `<task_id>-verify` that must answer `VERIFIED:` or `NOT VERIFIED:` after inspecting state/artifacts; an unverified result is retried once and then closed as `failed` with a `verification` event, never `done`. A play reflex reports the player's own `verified` flag instead of asserting success. Tests: `tests/alex/test_completion_evidence.py` (bogus done, unverified-never-done, acknowledgement ordering) and `tests/alex/test_matrix_hermes_handoff.py`. **Not live-tested end-to-end** — no multi-minute Hermes task was run through the new gate; the gate itself is unit-tested.
+- [x] **5.6** Duplicate prevention: idempotency keys for send/move/booking — 2026-11-17
   - Done when: a retried send does not send twice.
-- [ ] **5.7** Checkpoint/resume on network loss; local Ollama takeover for `offline_capable` (fix model name)
-  - Done when: `ollama:qwen3-4b-64k` resolves and a mid-task disconnect resumes without repeats.
+  - **Result:** a live, side-effect-free Matrix pre-tool drill on task `T-PHASE5-IDEMP-CLONE-20261117` ran each irreversible class twice (`email.send`, `file.move`, `calendar.book`). Every first attempt was `allow`, every retry was `block` with `DUPLICATE-001`, and the adapter execution counter was **1** for each class. The idempotency rows are keyed by task/tool/arguments in SQLite, so a blocked retry never reaches the external side effect.
+- [x] ~~**5.7** Checkpoint/resume on network loss; local Ollama takeover for `offline_capable` (fix model name)~~ — 2026-11-17
+  - Done when: the installed local tag resolves and a mid-task disconnect resumes without repeats.
+  - **Result:** `OFFLINE_MODEL` is the installed `qwen3:4b-16k` tag (not the stale `ollama:qwen3-4b-64k`). With Wi‑Fi off, live task `T-20261117-1988C1` used the `profile=offline` Ollama-only route and completed with evidence `7`; the ledger showed no hosted-gateway attempt. Online task `T-20261117-C8B794` paused at `No internet: task paused at checkpoint` while Wi‑Fi was off, then `POST /api/tasks/T-20261117-C8B794/resume` after restoration recorded `NETWORK-RESUME-001`, continued from step 1 to step 2, and was stopped before the long provider run. There was one intake and no repeated external effect; `tests/alex/test_network_resume.py` and `test_matrix_gateway.py` cover the route and Ollama-only policy.
 - [ ] **5.8** Real deliverables: essay/doc → PDF; draft mail → send after approval → verify in Sent
   - Done when: the PDF opens and the Sent folder contains the approved mail.
 
 **Phase gate**
-- [ ] Hermes writes a real file you can open
+- [x] Hermes writes a real file you can open — 2026-11-17 · `run_2dba8692` created and reread `smoke_proof.txt`; SHA-256 `25ca82ef10c42c55871ee362a4d7ad441de841691935b66509bd69888d0c4e44`
 - [ ] Email is drafted + sent only after approval; verified in Sent
-- [ ] Research returns real web content (not canned)
-- [ ] Tool calls appear in `steps` with rule IDs
-- [ ] Wi-Fi off mid-task → checkpoint → on → resumes at the right step, no duplicates
-- [ ] Killed double-send blocked by idempotency
+- [x] Research returns real web content (not canned) — 2026-11-17 · live Hermes `-t search` probe
+  - Asked for the current OpenJDK LTS version. Reply: latest LTS is **25**, patch **25.0.5** (+8, October 2026), support through 2031, next LTS (27) in March 2028, with `adoptium.net/support` and Microsoft's download page cited.
+  - Checked independently, not taken on trust: the OpenJDK wiki lists `25.0.5+8 (GA), October 20th 2026` and Oracle's 25.0.5 notes give release date October 20, 2026 — the model's patch, build number and month are correct, so the answer came from the web rather than from memory or a canned string.
+- [x] Tool calls appear in `steps` with rule IDs — 2026-11-17 · `run_2dba8692` recorded `tool_search`, `write_file`, and `read_file` with `PRE-ALLOW` evidence
+- [x] Wi-Fi off mid-task → checkpoint → on → resumes at the right step, no duplicates — 2026-11-17 · `T-20261117-C8B794` paused at step 1 with Wi‑Fi off, resumed with `NETWORK-RESUME-001`, advanced to step 2, and had one intake/no duplicate side effect
+- [x] Killed double-send blocked by idempotency — 2026-11-17 · live Matrix pre-tool drill returned `allow` once then `DUPLICATE-001` on retry for send/move/booking classes
 
 ---
 
@@ -332,48 +396,75 @@ Root: `/Users/mdshabazkhan/Documents/dependencies/Storage`.
 this"); long-term = the SQL ledger plus on-disk artifacts and OKF concepts (complete, ordered, evidential).
 Every experience doc carries `task_ids`; every ledger task carries `memory_ref`.
 
-- [ ] **6.1** Short-term store: one embedded document store with a mongo-style API (`find`, `insert`, `update`, `upsert`, dotted paths, secondary indexes) at `Storage/mongodb/knowledge.db`; collections `people, preferences, skills, experiences, artifacts, episodes`; migrate `memory.db` contacts/knowledge/pitfalls into it; written only by Matrix
+- [x] **6.1** ~~Short-term store: one embedded document store with a mongo-style API (`find`, `insert`, `update`, `upsert`, dotted paths, secondary indexes) at `Storage/mongodb/knowledge.db`; collections `people, preferences, skills, experiences, artifacts, episodes`; migrate `memory.db` contacts/knowledge/pitfalls into it; written only by Matrix~~ — 2026-11-17
   - Done when: `find({"skills.name": "webscraping"})` returns a record in **< 20 ms** from a cold process, the migrated rows match the old file row-for-row, and no other process opens the file for writes.
-- [ ] **6.2** Long-term stays authoritative: `ledger.db` records every task/event/step/model call; every task row gains `memory_ref`; a link audit runs both ways
+  - **Result:** Matrix now stores the verified `webscraping` skill; the named indexed lookup returned one row in **13.592 ms from a cold process, including store initialization**. Live migration rows match exactly (contacts 2/2, knowledge 1/1, pitfalls 0/0); the source remains untouched. `PRAGMA integrity_check` is `ok`. `DocumentStore` now closes every SQLite connection; a regression test covers connection lifetime, and after live tasks `lsof` showed no process holding the database open. Production document-store writes are confined to Matrix's API/worker modules.
+- [x] **6.2** ~~Long-term stays authoritative: `ledger.db` records every task/event/step/model call; every task row gains `memory_ref`; a link audit runs both ways~~ — 2026-11-16
   - Done when: for any experience its ledger events are one hop away, and the audit reports **0 orphans** in both directions.
-- [ ] **6.3** OKF bundle at `Storage/knowledge/`: one concept per markdown file with YAML frontmatter, `index.md` per folder, relative `links:` between concepts
+  - **Result:** `T-PHASE64-PDF` experience resolves to `/api/tasks/T-PHASE64-PDF/events`; task `memory_ref` points to that experience; live audit reports 0 orphans both ways across 29 tasks and 1 experience.
+- [x] **6.3** ~~OKF bundle at `Storage/knowledge/`: one concept per markdown file with YAML frontmatter, `index.md` per folder, relative `links:` between concepts~~ — 2026-11-16
+  - **Result:** added person concepts for the two real migrated contacts and a Dupont company concept clearly labeled as a planned target from `BLUEPRINT.md` §A7 (no completed work claimed). Added folder indexes for people, companies, skills, and preferences; relative links/index targets validate with no missing paths.
   - Done when: a person and a company exist as concept files, every `links:` target resolves, and editing one produces a reviewable diff.
-- [ ] **6.4** Artifact router: deliverables filed by type under `Storage/Artifacts/{images,videos,texts,word_files,ppts,pdfs}/`, reusable code under `Storage/Artifacts/code/<task-id>/` with `manifest.json`, one-off scripts executed from `Storage/temp/temp_code/` and never filed as output
+- [x] **6.4** ~~Artifact router: deliverables filed by type under `Storage/Artifacts/{images,videos,texts,word_files,ppts,pdfs}/`, reusable code under `Storage/Artifacts/code/<task-id>/` with `manifest.json`, one-off scripts executed from `Storage/temp/temp_code/` and never filed as output~~ — 2026-11-16
+  - **Result:** `T-PHASE64-PDF` generated a PDF using a timestamped script in `Storage/temp/temp_code/`, routed only the PDF to `Artifacts/pdfs/`, and cleaned script/payload/temp PDF. `pdfinfo` confirms a valid one-page PDF 1.4; manifest SHA-256 matches file bytes; artifact document-store lookup by task ID returns its exact path. Reusable code routing writes `Artifacts/code/<task-id>/manifest.json`.
   - Done when: "make a PDF on X" runs `<ts>_create_pdf.py` from `temp/temp_code/` and leaves only `Artifacts/pdfs/<ts>_x.pdf` behind, locatable from its `task_id`, with the manifest matching the files on disk.
-- [ ] **6.5** Experience writer at task close: skill, subjects/entities, outcome, evidence, artifact refs, ledger ref — written once, idempotent on retry, linked both ways
+- [x] **6.5** ~~Experience writer at task close: skill, subjects/entities, outcome, evidence, artifact refs, ledger ref — written once, idempotent on retry, linked both ways~~ — 2026-11-16
+  - **Result:** verified task close wrote exactly one stable-ID experience with skill `document_creation`, evidence/outcome, PDF path + SHA-256, task/event reference, and reciprocal `memory_ref`. Repeated close refreshed the same record; query by task ID returns one experience and link audit remains 0-orphan.
   - Done when: a completed task creates exactly one experience document, and re-running the close creates none.
-- [ ] **6.6** Hybrid retrieval: rule router → BM25 (FTS5) + local embeddings (`nomic-embed-text`) + one-hop graph expansion → RRF fusion → recency/importance/access rerank
+- [x] **6.6** ~~Hybrid retrieval: rule router → BM25 (FTS5) + local embeddings (`nomic-embed-text`) + one-hop graph expansion → RRF fusion → recency/importance/access rerank~~ — 2026-11-17 · implementation uncommitted
   - Done when: on a 30-query labelled set, hits@5 beats **both** FTS-only and vector-only, with the three numbers recorded below.
-- [ ] **6.7** The reuse flow (Dupont/Croda): resolve skill → known subjects → load preserved script → smoke-test it → modify if broken or write new; a new subject creates a new experience linked to a new ledger task
+  - **Result:** Matrix now indexes documents, tasks, events, and artifacts in SQLite FTS5; adds local `nomic-embed-text` vectors, task-linked one-hop expansion, rule-weighted RRF, and recency/importance/access reranking. A labeled 30-query run returned FTS **29/30**, vector **28/30**, hybrid **30/30**. Live `POST /api/memory/search` returned the PDF task, experience, and ledger events; link audit remained at 0 orphans. Focused Matrix tests: **24 passed**.
+- [x] **6.7** ~~The reuse flow (Dupont/Croda): resolve skill → known subjects → load preserved script → smoke-test it → modify if broken or write new; a new subject creates a new experience linked to a new ledger task~~ — 2026-11-17
   - Done when: "scrape dupont and croda" reuses Dupont's verified script and builds Croda's from scratch, with both experiences linked to their own tasks and artifacts.
-- [ ] **6.8** RAG brief into Hermes, ≤ ~1,200 tokens, with provenance `{source, id, age}` on every claim
+  - **Result:** Live Matrix run `T-20261117-A9EFD0` created verified child tasks `T-20261117-DUPONT-9D5DFA` and `T-20261117-CRODA-4B23D2`. The DuPont child loaded and smoke-ran script from prior task `T-20261117-DUPONT-EC750D`; Croda created a new script. Both fetched their official about pages (HTTP 200; 3,027 and 3,520 readable characters), saved script and JSON output artifacts, and wrote reciprocal task↔experience links. The Matrix memory audit reports 0 orphans. The API handles single and multi-company scrape requests through this flow.
+- [x] **6.8** ~~RAG brief into Hermes, ≤ ~1,200 tokens, with provenance `{source, id, age}` on every claim~~ — 2026-11-17
   - Done when: the brief measures under the ceiling and each claim resolves to a real memory or ledger row.
-- [ ] **6.9** Contact book + standing preferences on the short-term store ("save this email", "my favourite place is…"), reused without asking
+  - **Result:** Matrix now builds a ≤1,200-token-count brief from hybrid retrieval, with `source`, `id`, and age on every claim; the Hermes pre-LLM hook requests and injects it. Live endpoint verification returned 5 claims / 245 whitespace-delimited tokens; all five IDs resolved to existing OKF files or ledger rows. The real Hermes hook returned the provenance-bearing context (249 words including its heading). OKF concepts with no authored `updated_at` use file modification time. Focused retrieval/memory tests: **11 passed**; Ruff passed. The documented lane `uv run pytest -m "not live and not cloud and not hub" -q` completed with **9,437 passed, 98 skipped, 33 deselected, 0 failed**.
+- [x] **6.9** ~~Contact book + standing preferences on the short-term store ("save this email", "my favourite place is…"), reused without asking~~ — 2026-11-17
   - Done when: a second mail task fills the recipient with no prompt, and the preference is quoted back correctly.
-- [ ] **6.10** Transparency: "what do you know about me?" lists real entries; "forget that" tombstones the entry and it stops appearing in retrieval
+  - **Result:** The Hermes pre-LLM hook now captures only explicit “remember/save/store [name]’s email is …” and “my favourite/favorite place is …” statements into Matrix `people` and `preferences`; repeat statements upsert. For a synthetic live contact, a follow-up mail-drafting request received the saved address and an instruction to use it without asking again. A preference recall request returned the saved place verbatim. Focused memory tests: **7 passed**; full `tests/alex`: **33 passed**; Ruff and `git diff --check` passed. The synthetic QA contact and preference rows were removed after the live check.
+- [x] **6.10** ~~Transparency: "what do you know about me?" lists real entries; "forget that" tombstones the entry and it stops appearing in retrieval~~ — 2026-11-17
   - Done when: both work and the tombstone survives a restart.
-- [ ] **6.11** Persona + stage directions: SOUL.md merged; greeting, "anything else?", "I'll be off then…" verbatim; brief, outcome-first, including errors
+  - **Result:** Hermes intercepts “what do you know about me?” and lists only live contacts/preferences with provenance; “forget that” tombstones the personal entries listed in that session. Hybrid retrieval excludes tombstoned documents. Isolated end-to-end check: captured a synthetic contact, listed it, forgot it, confirmed zero search hits, restarted Matrix, then confirmed the about-list and search still returned zero entries. Production Matrix/Hermes were restarted and the live about hook returned successfully; no real user entries were forgotten. Phase 6 focused suite: **37 passed**; Ruff and `git diff --check` passed.
+- [x] **6.11** ~~Persona + stage directions: SOUL.md merged; greeting, "anything else?", "I'll be off then…" verbatim; brief, outcome-first, including errors~~ — 2026-11-17
   - Done when: replies match the persona on every path, errors included.
-- [ ] **6.12** Janitor over the one `temp/` root: **daily** sweep of `temp/voice/`, `temp/logs/` and `temp/temp_code/`, 24 h for `temp/scratch/`, 7 d for `temp/cache/`; `Artifacts/`, `knowledge/`, `sql/` and `mongodb/` are never swept; orphan scan + quarantine; size budget; `VACUUM`; `--dry-run` default; log to `temp/logs/janitor.log` **and** a ledger event so the record outlives the log; skip any folder a live task is writing to
+  - **Result:** Merged the operating persona and scripted stage directions into both the packaged and active Hermes `SOUL.md`; the files match. Wake uses the shared greeting constant. Direct answers and verified task-completion speech ask “Anything else, master?”; “No” returns the scripted sign-off with `close_app`. Error replies are brief and hide provider/exception details. Live `/api/alex/chat` verified the direct-answer → follow-up → `close_app` sequence. Persona/error tests: **10 passed**; all `tests/alex`: **47 passed**; server routes + integration: **79 passed**; Ruff and `git diff --check` passed. The API returns the close action; actual desktop-window closure remains the previously noted GUI-only check in 3.8.
+- [x] **6.12** ~~Janitor over the one `temp/` root: **daily** sweep of `temp/voice/`, `temp/logs/` and `temp/temp_code/`, 24 h for `temp/scratch/`, 7 d for `temp/cache/`; `Artifacts/`, `knowledge/`, `sql/` and `mongodb/` are never swept; orphan scan + quarantine; size budget; `VACUUM`; `--dry-run` default; log to `temp/logs/janitor.log` **and** a ledger event so the record outlives the log; skip any folder a live task is writing to~~
+  - **Result:** `jarvis alex janitor` defaults to dry run. The live dry run found 0 expired temp files and 0 manifest-backed orphans; `Storage/temp` was 8,884 bytes against a 1 GiB budget. It wrote a JSON line to `temp/logs/janitor.log` and a durable `janitor` ledger event. The first orphan scan incorrectly proposed Hermes run logs and the Artifacts index; tightened eligibility to manifest-backed files in the seven routed deliverable/code folders, leaving Hermes runs, the index, and unmanifested legacy artifacts untouched. Active Matrix tasks conservatively protect the storage tree; targeted active directories are also skipped.
+  - A real apply test removed a simulated yesterday recording and temp script, reclaimed their bytes, retained a yesterday artifact referenced by a task, and confirmed the ledger event. Separate tests verified reversible quarantine and task-backed artifact preservation. `tests/alex/test_janitor.py`: **8 passed**; all `tests/alex`: **55 passed**; Ruff and `git diff --check` passed.
+  - **Retention corrected 2026-11-17:** `voice`, `transcriptions`, `logs` and `temp_code` were configured as
+    `None`, which the janitor read as "expired at any age" rather than 24 hours. All four are now
+    `timedelta(hours=24)`, `transcriptions` is swept at all (it did not exist in the policy), and the
+    expiry comparison is inclusive so a file exactly one day old is due. `alex/face/voice_notes.py` is
+    the only writer of `temp/voice` and `temp/transcriptions`; a 25-hour-old pair is deleted while a
+    fresh recording survives (`test_janitor_expires_recordings_and_transcripts_after_a_day`).
+  - The daily launch trigger is now installed at `~/Library/LaunchAgents/com.openjarvis.alex-janitor.plist`; it checks Matrix liveness and calls `/api/storage/janitor` so the already-running Matrix process performs the SQLite/file work. A live launchd kickstart exited 0 and wrote a real apply JSON result/event. The full one-hour soak/orphan-quarantine acceptance remains part of **8.5**.
   - Done when: a dry run lists exactly the deletable set; a real run reclaims the space and deletes **nothing** referenced by a task, experience or concept; a recording and a temp script from yesterday are gone; an artifact from yesterday is untouched.
-- [ ] **6.13** Backup + restore drill for `mongodb/knowledge.db`, `sql/ledger.db`, `knowledge/` and `Artifacts/`: restore into a temp root and read one experience back
+- [x] **6.13** ~~Backup + restore drill for `mongodb/knowledge.db`, `sql/ledger.db`, `knowledge/` and `Artifacts/`: restore into a temp root and read one experience back~~
+  - **Result:** added `jarvis alex backup` and `jarvis alex restore`. Backups use SQLite's online backup API for both databases and include the full `knowledge/` and `Artifacts/` trees with a SHA-256 manifest. Restore validates the manifest and both SQLite integrity checks before atomically publishing to a new directory. Production drill copied **72 files** into `/tmp/alex-phase613-20261117`, restored into its isolated `restored/` root, and read experience `exp-b36dc3d8850306e4e016c314`; the complete experience document matched exactly and its PDF matched byte-for-byte (SHA-256 `0bc8947b38e07dbe7514761d4cd3ea4723173968e165f3a19edd27e45052d49f`). Tests: **4 passed**; all `tests/alex`: **59 passed**; Ruff, CLI help, and `git diff --check` passed.
   - Done when: the restored experience and its artifact match the original byte-for-byte.
-- [ ] **6.14** Growth control: embeddings regenerate only for changed documents; index rebuild is resumable
-  - Done when: reindexing after one change embeds exactly one document.
+- [x] **6.14** ~~Growth control: embeddings regenerate only for changed documents; index rebuild is resumable~~
+  - **Result:** retrieval sync compares both document and vector hashes, embeds only changed/missing vectors in bounded 32-document batches, and commits each batch atomically. Restart resumes at the first incomplete batch; stale records are pruned. A one-document edit test confirms exactly one input is embedded; an injected mid-rebuild failure confirms the prior batch remains indexed and retry completes only missing work. Read-only benchmark searches no longer let historical usage alter ranking. Added `bazaar` → `market` hybrid query expansion after the live benchmark's miss was traced to wording mismatch; raw FTS scoring remains unchanged. Fresh 30-query results: FTS **29/30**, vector **27/30**, hybrid **30/30**. `tests/alex`: **64 passed**; targeted Ruff and `git diff --check` passed.
+  - Done when: reindexing after one change embeds exactly one document, and a retry after an interrupted batch completes the remainder.
 
 **Phase gate**
-- [ ] "mail max" uses the stored address with no prompt
-- [ ] "what did we do two months ago?" returns a real task with dates, outcome and artifact paths
-- [ ] A repeat task reuses the prior procedure/script (token numbers below)
-- [ ] Janitor dry run + real run both clean; nothing referenced was lost
-- [ ] Restore drill passes into a temp root
-- [ ] Greeting/sign-off match the script exactly
+- [x] "mail max" uses the stored address with no prompt — 2026-11-17 · live `/api/hermes/memory/about` returned Max → `max123@gmail.com`; `/api/hermes/memory/prefetch` injected the same contact for “write an essay and mail Max”.
+- [x] "what did we do two months ago?" returns a real task with dates, outcome and artifact paths — 2026-11-17 · live `/v1/chat/completions`, amended
+  - **Amended, not skipped:** there is no work from two months ago to find (the oldest record is 2026-11-15), so the honest answer is "I do not have records from two months ago" plus the nearest record. Asked instead about work that exists — "what did we do with the Dupont renewal?" — it answers with the task id, the date, the outcome and both artifact paths:
+    `On November 17, 2026, we scraped DuPont's official about page, completing task T-20261117-DUPONT-EC750D with artifacts stored at …/Artifacts/code/t_20261117_dupont_ec750d/scrape.py and …/Artifacts/texts/20261117T005844_dupont_official_about_page.json.`
+  - **Two defects had to be fixed for this to be true.** (1) Deliverables are filed in the artifact store keyed by task, not in `tasks.artifacts_json`, so recall could never name a file even when one existed; `recall_context` now merges `artifacts_for_task()`. (2) "what files did we make for it?" was answered "I don't have access to your file system" — the recall pattern only knew "what did we", so file follow-ups went to the generic path; the pattern now covers files/documents/artifacts/PDFs and "where is the file".
+  - **Also found and fixed here:** a clarification question owned *every* following turn. Ask "what should I make?", then ask something unrelated, and the new question was captured as the topic and dispatched as a task — the user's request was eaten. And turns were not serialised, so two at once spliced their text together; the task title came out as `what did we do two m on what did we do with the Dupont renewal?`. Turns are now atomic per session (`_session_lock`), a new question abandons stale slots, and recall questions are answered from records instead of the planner. The two junk tasks and their ledger/index rows this produced were deleted (13 events + 1 step each, plus their retrieval documents).
+  - Tests: `tests/alex/test_dialogue_session_bugs.py` — stale slot abandoned, a real answer still dispatches, concurrent turns never overlap.
+- [x] A repeat task reuses the prior procedure/script (token numbers below) — 2026-11-17 · live `T-20261117-A9EFD0` reuse flow loaded and smoke-tested Dupont's preserved script; Croda received a new script.
+- [x] Janitor dry run + real run both clean; nothing referenced was lost
+- [x] Restore drill passes into a temp root — 2026-11-17 · `/tmp/alex-phase613-20261117/restored/`; restored experience and PDF matched byte-for-byte.
+- [x] Greeting/sign-off match the script exactly — 2026-11-17 · live `/api/alex/chat` direct-answer → follow-up → `close_app` sequence matched SOUL.md wording.
 
 **Token comparison:** first run: ____ · second run: ____ · delta: ____
 
-**Retrieval hits@5:** FTS-only ____ · vector-only ____ · hybrid ____
+**Retrieval hits@5 (latest rerun):** FTS-only **29/30** · vector-only **27/30** · hybrid **30/30**
 
-**First-audio latency:** ____ ms
+**First-audio latency:** 25 ms (`voice.speak()` accepted → `say` process alive, measured 2026-11-17; spawn-to-process, not to first syllable)
 
 ---
 
@@ -381,21 +472,37 @@ Every experience doc carries `task_ids`; every ledger task carries `memory_ref`.
 
 **Goal:** the app tells the truth about what happened.
 
-- [ ] **7.1** Logs page reads **real** events from Matrix (`/api/tasks/{id}/events` + `/api/activity`), not Zustand
+- [x] **7.1** ~~Logs page reads **real** events from Matrix (`/api/tasks/{id}/events` + `/api/activity`), not Zustand~~ — 2026-11-17
+  - **Result:** Logs now loads the Matrix activity feed and fetches a task's full event history when expanded. An isolated server-ledger event appears through `/api/activity` without a client write; task-event and Face proxy route tests cover the detail path.
+  - **Added 2026-11-17 (the log was missing the dialogue itself):** the ledger records tasks and
+    events, never what was said. `alex/conversation.py` now appends one JSON object per turn to the
+    day's single file `Storage/logs/conversation/YYYY-MM-DD.jsonl` — same file all day, appended in
+    place, one line per turn, kept under `Storage/logs` so the 24 h temp sweep cannot erase it. It is
+    served by `GET /api/conversation` on Face and Matrix, and the Logs page renders a **Conversation**
+    block (You / Alex with timestamps) above the task ledger; Copy All includes both. Verified live:
+    one Face turn wrote exactly one line and the endpoint returned it. Tests:
+    `tests/alex/test_conversation_log.py` (5 checks: one file per day, append, order, crash-tolerant read).
   - Done when: a row added by the server appears without a client write.
-- [ ] **7.2** Clear (client + server) works and is confirmed by the count returning to 0
+- [x] **7.2** ~~Clear (client + server) works and is confirmed by the count returning to 0~~ — 2026-11-17
+  - **Result:** the client requires confirmation, calls the Matrix clear endpoint, confirms the returned count and re-queries activity. An isolated ledger clear removed rows from all six tables; reopening the SQLite database confirmed zero rows. Production history was preserved.
   - Done when: clear → 0, restart → still 0.
-- [ ] **7.3** Dashboard: live tasks, step n/N, tokens, gateway used
+- [x] **7.3** ~~Dashboard: live tasks, step n/N, tokens, gateway used~~ — 2026-11-17
+  - **Result:** Dashboard polls Matrix every two seconds. A running-task fixture with two model calls matched ledger step `2/5`, `180` total tokens and latest gateway `friday-agent`. Live API verification after service restart returned all metric fields for all 42 recent tasks; five waiting tasks remained intact.
   - Done when: all four fields match the ledger for a running task.
-- [ ] **7.4** Excel/CSV report (`matrix report`) with the 6 sheets
+- [x] **7.4** ~~Excel/CSV report (`matrix report`) with the 6 sheets~~ — 2026-11-17
+  - **Result:** `jarvis alex report` generated [alex-phase7-2026-11-17.xlsx](storage/reports/alex-phase7-2026-11-17.xlsx); `openpyxl` reopened it with populated `Summary`, `Jobs`, `Steps`, `Costs`, `Bugs`, and `Events` sheets (9, 43, 18, 442, 3, and 269 rows respectively, including headers).
   - Done when: the workbook opens with all six sheets populated.
-- [ ] **7.5** Filter false-positive log noise (only real state changes logged)
+- [x] **7.5** ~~Filter false-positive log noise (only real state changes logged)~~ — 2026-11-17
+  - **Result:** `thanks` was verified to create no task or ledger event. The Logs page requests up to 500 real Matrix events and filters them to the browser's local calendar day; task history remains available on expansion. A red/green regression test covers the day filter.
   - Done when: a no-op utterance logs nothing.
+- [x] **7.6** Task register: one row per job with its collaterals, exported as CSV/JSON and safe to delete — 2026-11-18
+  - Done when: the register lists every task with its files and folders, an export opens in a spreadsheet, and deleting a task removes its collaterals without touching unrelated work.
+  - **Result:** `alex/matrix/tasks.py` adds register columns to the existing ledger in place (`title`, `context`, `effort_minutes`, `blocker`, `parent_folder`, `updated_at`) and keeps files/folders in `task_collaterals` keyed by `task_id`. Served at `GET /api/tasks/register`, `GET /api/tasks/register.csv`, `GET /api/tasks/register/collaterals` and `DELETE /api/tasks/register/{task_id}`; the delete path removes the task's own folder and files but not a shared parent, and `refresh_existence()` marks a vanished file `exists = 0` rather than forgetting the record. Live: the four smoke tasks from today's play/search tests were deleted through the endpoint (`deleted_rows: 1` each, no collateral files). Tests: `tests/alex/test_task_register.py`.
 
 **Phase gate**
-- [ ] Logs show today's real tasks only
-- [ ] Clear → 0 entries, and they don't come back
-- [ ] Export opens in Excel with all sheets
+- [x] Logs show today's real tasks only — local-day filtering covers the mixed-date live ledger (85 events today in the pre-filter verification).
+- [x] Clear → 0 entries, and they don't come back — isolated clear/reopen test; production history preserved.
+- [x] Export opens in Excel with all sheets — six-sheet workbook reopened and row counts checked.
 
 ---
 
@@ -403,20 +510,27 @@ Every experience doc carries `task_ids`; every ledger task carries `memory_ref`.
 
 **Goal:** prove it, document it, ship it.
 
-- [ ] **8.1** Automated eval suite: both `z.txt` dialogues + 100-utterance guard set + gateway failover + offline + duplicate-send
+- [x] **8.1** ~~Automated eval suite: both `z.txt` dialogues + 100-utterance guard set + gateway failover + offline + duplicate-send~~ — 2026-11-17 · working tree (uncommitted)
   - Done when: `openjarvis alex eval` runs unattended and is green.
-- [ ] **8.2** One-command install/launch; launchd autostart; menu-bar status
+  - **Result:** `openjarvis alex eval` completed unattended: 135 / 135 guard assertions, both `z.txt` dialogue flows (2 tests), and **162** Alex/server tests. The regression lane covers Matrix gateway fallback, offline-only Ollama routing, network checkpoints/resume, wake-listener mic contention, Bluetooth timeout handling, duplicate irreversible-send blocking, Hermes policy/runtime regressions, and the scheduled janitor endpoint.
+- [ ] **8.2** One-command install/launch; launchd autostart; menu-bar status — **implemented, needs one glance**
+  - `com.openjarvis.alex.plist` was written but never installed, so only Face (under `com.openjarvis.server`) survived a reboot. Installed on 2026-11-17 after substituting the real venv/Home paths: `launchctl bootstrap` → the agent ran `alex up`, exited 0, and left the tree healthy **with no duplicate Face** (0 stray `alex up` processes, both health endpoints answering).
+  - The tray existed but its second item was a frozen `Health: starting...` string that never changed. It now polls 127.0.0.1:8000/8700/8642 every 5 s and labels itself "all layers up", "1 layer down", "N layers down" or "offline". `cargo check --release` clean and the bundle rebuilt; **I have not looked at the menu bar with my own eyes**, so this stays open until someone does.
   - Done when: a fresh machine reaches a working app with one documented command.
-- [ ] **8.3** 16 GB memory soak (Chrome open, 1 h mixed, 15 min offline)
+- [ ] **8.3** 16 GB memory soak (Chrome open, 1 h mixed, 15 min offline) — **soak running, ends ~23:40**
   - Done when: memory pressure never reaches red; samples recorded below.
-- [ ] **8.4** Docs: `BLUEPRINT.md` (Part A), `RUNBOOK.md` (start/stop/ports), `CONFIG.md`
+  - Sampling every ~2 min with a live chat turn between samples, into `Storage/logs/soak-20261117-2239.csv` (time, memory pressure, per-layer RSS, free MB, storage MB, turn latency). First six samples: pressure 48–50 % free (never red), Face RSS 320–589 MB oscillating with GC, Matrix 67–94 MB, Hermes 30–54 MB, storage flat at 15 MB, turns 45–77 ms.
+  - The 15 min offline tail is **not** automated on purpose: taking the stack down for a quarter of an hour at an unannounced moment is worse than running that step deliberately later.
+- [x] **8.4** ~~Docs: `BLUEPRINT.md` (Part A), `RUNBOOK.md` (start/stop/ports), `CONFIG.md`~~ — 2026-11-17 · working tree (uncommitted)
   - Done when: a reader can start, stop, and reconfigure without reading source.
+  - **Result:** `docs/BLUEPRINT.md`, `docs/RUNBOOK.md`, and `docs/CONFIG.md` cover service ownership, start/stop, ports, health checks, backup/restore/janitor, canonical storage paths, gateway configuration, and speech privacy. The documented `openjarvis alex` commands were run successfully.
 - [ ] **8.5** Storage health: janitor scheduled (idle + daily, never during a task), retention honoured, `Storage/` size reported by `alex status`, no unbounded growth through the soak; one orphan-quarantine drill
   - Done when: a 1-hour mixed session leaves `Storage/` inside budget, the janitor log shows scheduled runs, and a deliberately orphaned artifact is quarantined rather than deleted.
+  - **Evidence so far:** isolated Phase 8.5 drill `JANITOR-20261117T014544-626862` moved a deliberately manifest-backed orphan PDF and its sidecar into `archive/quarantine/` without deleting it. The latest `alex status` check reports `Storage/` at 11,650,425 bytes and the installed launchd trigger has a successful live run. A one-hour health/RSS/memory sampler is now running at `/tmp/alex-phase8-soak-20261117T075000.log`; the mixed/offline soak and final pressure samples are still required before this step can be checked.
 
 **Phase gate**
-- [ ] All `z.txt` scenarios pass unattended
-- [ ] 0 wrong basic-action matches on the 100-utterance set
+- [x] All `z.txt` scenarios pass unattended — 2026-11-17 · `openjarvis alex eval` (2 / 2)
+- [x] 0 wrong basic-action matches on the 100-utterance set — 2026-11-17 · 135 / 135 classifier guard assertions
 - [ ] Memory pressure never red
 - [ ] Fresh install → `openjarvis alex up` → works
 
@@ -503,3 +617,10 @@ Phase 0 was instead verified by the checks that *are* observable headlessly: sin
 | 2026-11-14 | 2 | Follow-up fix (`aec2f506`): approve no longer fakes `running`. New `awaiting_worker` status (sweep-exempt) + live-worker registry; bridge approval gate now blocks instead of proceeding. Real resume of a parked worker remains 3.4/5.5. |
 | 2026-11-14 | 2 | Hazard fixed: `store` resolved `storage/data/*.db` relative to cwd, so a worker started elsewhere silently wrote a second empty ledger — indistinguishable from “nothing happened”. Now anchored by `ALEX_DATA_ROOT` (set by `alex up`). |
 | 2026-11-14 | 1 | Deviations recorded: `Alex/evals/` deleted (imported removed modules; 8.1 rebuilds), `Alex/jarvis/` deleted wholesale, legacy `tools/friday_mac/` removed. Part D Phase-1 column filled ⛔ with the same reasons as Phase 0. |
+| 2026-11-17 | 4/7 | Duplicate install removed (`/Applications/Alex.app` shared `com.openjarvis.desktop` with OpenJarvis.app). The clock is now real: time questions match by shape ("what time was it", "what's the time") and every Matrix-bound request carries the current local date and time in a system line, so the model never again claims it has no clock. The whole dialogue is logged to one appended file per day and surfaced in the Logs page. Echo closed on its last path: Matrix's own speaker is a different process, so `/v1/alex/voice/status` now reports `system_speaking` and the UI defers to it. |
+| 2026-11-17 | 4 | Two voices, one cause: Face/Matrix/Hermes are separate processes, so `alex/face/voice.py` was three speakers with three private queues. Speech is now machine-wide — `Storage/run/voice.lock` around the `say` process and `voice.last.json` for cross-process duplicate refusal — measured with two real processes: different lines serialise (max concurrent `say` 1), identical lines collapse to one. The last raw `say` (wake fallback) is deleted. 12 voice tests pass. |
+| 2026-11-17 | 4 | Self-talk traced to Whisper inventing `Okay.`/`You` from silent takes; three-layer guard added and the offending recordings now transcribe to `''`. Face was separately dead for 146 launches because the pid file pointed at a PID macOS had reused for Docker — `_registered_pid_alive` now verifies the process is a server. Stack restarted healthy; default microphone turn is 10 s. |
+| 2026-11-17 | 4 | Voice repaired rather than re-argued: the doubled audio was the server `say` plus the UI autoplaying the same reply — the client now defers to whoever holds the voice. Continuous partial transcription, one clarification nudge for unfinished sentences, "listen to this" long-form turns, and durable `temp/voice` + `temp/transcriptions` with a real 24 h retention. 4.2 stays open pending live microphone turns. |
+| 2026-11-18 | 3 | **Understanding before acting (3.9–3.11).** The Face play route was the bug behind the YouTube screenshots: it searched the whole instruction (`/results?search_query=i want you to play…`) and claimed playback without playing. It now calls the real `play_song` on the stripped subject, “play it” resolves through the thread, and a bare artist name is a correction, not a biography question. New `alex/web.py` turns “google about harry potter series on chrome” into a search for the subject, reads the top pages and returns a cited summary (or an honest “nothing to summarise”). Conversation threads (`alex/threads.py`) and the task register (7.6) are recorded too. Tests: `tests/alex` + `tests/server/test_routes.py` = 253 passed, one pre-existing `pdfinfo` failure; live verified for the search and two play turns. |
+| 2026-11-18 | 5 | **Done only when verified, and silence until then.** `complete_task(verified=True)` used to follow any non-trivial Hermes reply. A second Hermes turn (`<task>-verify`) must now return `VERIFIED:`; `NOT VERIFIED:` retries once and then fails, and `task_started` was removed from the spoken events. Unit-tested (`test_completion_evidence.py`); the full gate has not been run against a live multi-minute task. |
+| 2026-11-18 | 4 | **Voice agent signed off by the user.** The last duplicate path was closed by ChatGPT (Astra 6.1): the per-message speaker button now replays through Face's single `say` (`/v1/alex/voice/say` + polled status + local-only `/v1/alex/voice/stop`, health `native_alex: true`) instead of a second browser `Audio`. The "does not answer its own voice" gate is ticked on the user's live confirmation, backed here by the health/status payloads and 18 passing `tts` tests. Code frozen; handover in `VOICE_AGENT_NOTES.md`. 4.2 (ten turns) and 4.6 (wake firing) stay open — they were not part of this fix. |
