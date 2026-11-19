@@ -1159,3 +1159,132 @@ five smoke threads created by today's live checks were deleted through the regis
 (its retry/fail paths are unit-tested only); the desktop UI was not clicked through, so the reply text
 was read from the API rather than the window; no audio was heard. The single acknowledgement line is a
 deliberate choice the user may still want removed.
+
+---
+
+## 2026-11-19 — Code belongs in the chat, and a question is not a task
+
+**The audit found no code path at all.** `alex/classify.py` had exactly three destinations
+(`basic_reflex`, `quick_answer`, `complex_task`), and "write a python program …" matched the
+`complex_task` rule (`write` + deliverable `program`). Every code request therefore went to Hermes,
+which writes files inside its own run directories — that is where the five or six `triangle_area.py`
+copies in the screenshots came from. There was no branch that could have returned a code block to
+the chat, and no state that could have answered "is the code done?" without starting another run.
+
+**One new module, one small interface.** `alex/coder.py` is the deep module for this behaviour:
+`understand(text, thread)` decides the action and says why, and `maybe_handle(session, text)` executes
+it. The eight actions are `generate`, `modify`, `show`, `save`, `run`, `explain`, `status` and
+`reject`; rules are deterministic and run in a fixed order, so the same sentence always takes the same
+path. `dialogue._handle_turn` calls it after the wake/slot handling and **before** web research and
+`classify`, which is what removes the accidental YouTube and Hermes routes.
+
+**Display, then nothing.** A code request is answered with one fenced block (the existing
+`MessageBubble`/`CodeBlockPre` renders it with highlighting and a working Copy button) and stores the
+snippet on the conversation thread (`thread["code"]`: id, language, text, filename, version, saved
+paths). No task row, no artifact, no file. Project requests (app, application, API, website, service,
+server, database, framework names) deliberately still go to Hermes, because a working application is
+real filesystem work, not a chat block.
+
+**Saving is explicit, canonical and idempotent.** `resolve_destination` honours the requested path
+(home-relative paths resolved, directories created, system directories and the storage internals
+refused) and otherwise uses `Storage/Artifacts/code`. The hash is computed over exactly the bytes that
+are written, so the second "save it" answers "already saved at … nothing changed" instead of creating
+another copy — a bug the first test run caught, because the trailing newline was added after hashing.
+A file that already exists with *different* content is never overwritten without "overwrite it".
+Every real write gets a ledger task, a register row and an artifact document with sha256, language and
+snippet id, and the reply reports created-vs-updated from the filesystem, not from intent.
+
+**Continuity and execution.** "Add input validation" sends the previous code plus the instruction and
+stores version 2 of the *same* snippet; intermediate versions are never written to disk. "Run it"
+executes Python with a 20 s timeout in `Storage/temp/code_runs/run-*`, reports the real exit status and
+output, and deletes the scratch directory — a run is never a parallel artifact. Language is detected
+from the request; a non-Python snippet is refused honestly rather than executed by a guess.
+
+**Status and corrections are read, not acted on.** "Is the code done?" answers from the snippet in the
+chat (with any saved paths) or from the last ledger task's real status ("Not yet, master. It's still
+running."). "Show me the code here in chat" re-displays the same block. "I'm not making that." is a
+correction: "Understood — dropping that. Nothing was opened or started." None of these dispatch a task
+or touch an actuator — the tests fail the run if `_run_reflex` is reached.
+
+**Metrics no longer lie by default.** The session panel rendered `0` when neither the savings endpoint
+nor telemetry had reported a value. Requests and Output Tokens now distinguish "no measurement" from a
+measured zero and print **Unavailable** for the former.
+
+**Checked here:** `tests/alex` → **203 passed**, one failure,
+`test_write_text_pdf_creates_a_readable_pdf`, the pre-existing missing `pdfinfo` binary. New
+`tests/alex/test_code_in_chat.py` → **10 passed**: chat-only generation with no task/artifact/browser,
+project requests still reaching Hermes, show/status/correction without dispatch, one canonical save and
+a no-op repeat, custom path, snippet continuity across versions, a real Python run with a cleaned
+scratch directory, and an honest failure when the model is unavailable. Frontend typecheck `npx tsc -b`
+→ exit 0.
+
+**Not checked here, and not claimed:** the real gateway was not exercised for code generation — the
+hosted gateways answer 401 without keys and the Ollama fallback was not warmed, so live model-written
+code is unverified (routing, storage and failure handling are covered by the tests above). The desktop
+window was not clicked through, so the code block and Copy button were not seen rendering in the app;
+they use the existing Markdown renderer unchanged.
+
+## 2026-11-19 — the PDF test stops depending on poppler
+
+`test_write_text_pdf_creates_a_readable_pdf` was the one red test left in `tests/alex`, and it was red for the
+wrong reason: it piped the file through `pdfinfo`, a poppler binary that is not installed on this machine, so a
+working writer reported as a failure and every run had to be read with that caveat.
+
+`write_text_pdf` emits an uncompressed PDF, so the test now reads the bytes it just wrote and checks the
+structure directly: the `%PDF-` header and `%%EOF` trailer, every `xref` offset landing exactly on the
+`N 0 obj` it indexes, a `/Pages` tree with `/Count 1` and exactly one `/Type /Page`, and the title and both
+paragraphs present as `Tj` strings. That is a stricter assertion than "pdfinfo printed Pages:", and it needs
+no external program.
+
+**Checks.** `tests/alex` → **204 passed, 0 failed** (was 203 passed, 1 failed).
+
+---
+
+## 2026-11-19 — one conversation is one chat, and a follow-up keeps its code
+
+**The reply had no conversation to read.** `_generate_code` was called with the user's sentence and
+nothing else, so "I need the code for the above problem" arrived at the model as a request about a
+problem the prompt never mentioned. The model did what a model does with a hole: it filled it, and the
+result read as a hallucination because it was one. Code generation now receives the thread through
+`_history_for_code` — every earlier turn, with **previous code blocks elided** — so the problem, the
+constraints and the follow-up are all present while the previous block cannot simply be echoed back
+verbatim. `_GENERATE_START` also accepts the natural phrasings ("I need", "I want", "would like", "we
+need"), and the "code for the above problem" phrase is matched *before* the `_SHOW` replay rule, so it
+generates again instead of re-displaying the old snippet. The quick-answer prompt now forbids asking
+for context that is already in the conversation.
+
+**The sidebar was showing one conversation twice.** The backend was right and the frontend was wrong:
+`alex/threads.py` keeps one JSON file per conversation, and a chat started while the previous turn was
+still running resolved to the *same* thread (`CONTINUATION_WINDOW`, 2 h). The UI, meanwhile, created a
+new local record for every new draft, so one server conversation owned two sidebar entries — and turns
+from one appeared under the other. The evidence was on disk: chat `mwn7grt1ma9bwv` ("the area of a
+triangle.", 12:35:06) and chat `mwndy0hc0y8n24` ("What is the formula?", 15:36:28) shared one thread,
+because the first turn was still open when the second was typed.
+
+**The fix makes the thread the identity.** Every `alex` payload — JSON and SSE — now returns
+`thread_id`, the same string the server uses as the file name. `Conversation.threadId` stores it and
+`store.adoptThread()` runs *after* the stream (never during, so the merge cannot delete the chat still
+being written): it adopts the id, or finds the twin record with that id, folds the later turns into the
+earlier chat in timestamp order and removes the duplicate. `mergeSameThreadConversations()` repeats the
+collapse at load, so a reload cannot resurrect a split. Existing on-disk chats predate `threadId` and
+therefore merge after each receives one more turn in its shared thread — a deliberate limit, not a
+silent history rewrite.
+
+**"Open a new chat" was launching an app called "new check".** The phrase matched the `open_app` reflex,
+which took "new check" as the app name; speech recognition renders "chat" as "check" or "chad", so the
+user's two attempts produced an app-verification failure and then a generic "I'm not sure how to handle
+that request". A new chat is a *UI* action, exactly like goodbye: `_NEW_CHAT` in `dialogue.py` returns
+`action: "new_chat"` before reflex routing and `InputArea` creates the chat on it. The ASR variants
+(`check`, `chad`, `chet`, `chatt`) are accepted only when the phrase is the entire turn, so "run a new
+check" still means a check and the rule cannot swallow a real instruction.
+
+**Checked here:** `tests/alex` → **214 passed** (3 new in `test_code_in_chat.py`, 7 in the new
+`test_new_chat_intent.py`); `npx tsc -b` → exit 0; `npx vitest run` → **131 passed, 28 files** (3 new in
+`store.thread-adoption.test.ts`). Live on `:8000`: "code." returned the rectangle block, "I need the
+code for the above problem." returned a fresh block for the same problem, "Open a new check." and
+"new Chad Alex." both returned `action: new_chat`, and "run a new check" was not hijacked. The five
+smoke threads created by those checks were deleted afterwards.
+
+**Not checked here, and not claimed:** `/Applications/OpenJarvis.app` ships its own bundled assets, so
+the new-chat action and the sidebar merge only appear there after a desktop rebuild — the running app
+still has the old frontend.
